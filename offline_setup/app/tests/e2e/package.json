@@ -1,0 +1,14 @@
+{
+  "name": "assistant-console-face-phase-e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:regression": "REGRESSION_SUITE=1 playwright test regression_live.spec.ts security_owasp.spec.ts --workers=1",
+    "test:regression:https": "REGRESSION_SUITE=1 PLAYWRIGHT_BASE_URL=https://127.0.0.1:7860 playwright test regression_live.spec.ts security_owasp.spec.ts --workers=1",
+    "test:static-only": "playwright test face_phase.spec.ts text_chat_errors.spec.ts",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
+  }
+}

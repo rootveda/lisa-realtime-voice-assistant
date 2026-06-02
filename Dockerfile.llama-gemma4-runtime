@@ -1,0 +1,36 @@
+FROM nvidia/cuda:13.0.0-devel-ubuntu24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    git \
+    cmake \
+    ninja-build \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Link CUDA driver stubs so static link steps succeed during image build.
+RUN ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/lib/x86_64-linux-gnu/libcuda.so.1
+
+# Use ggml-org upstream for current model architecture support.
+ARG LLAMACPP_REF=master
+ARG CUDA_ARCH=120
+RUN git clone https://github.com/ggml-org/llama.cpp.git /opt/llama.cpp && \
+    cd /opt/llama.cpp && \
+    git checkout "${LLAMACPP_REF}" && \
+    cmake -B build -G Ninja \
+      -DGGML_CUDA=ON \
+      -DGGML_CUDA_F16=ON \
+      -DGGML_CUDA_NO_VMM=ON \
+      -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCH}" \
+      -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build --target llama-server llama-cli -j"$(nproc)" && \
+    cp build/bin/llama-server /usr/local/bin/ && \
+    cp build/bin/llama-cli /usr/local/bin/ && \
+    cp build/bin/*.so* /usr/local/lib/ && \
+    ldconfig && \
+    rm -rf /opt/llama.cpp
+
+ENTRYPOINT ["/usr/local/bin/llama-server"]

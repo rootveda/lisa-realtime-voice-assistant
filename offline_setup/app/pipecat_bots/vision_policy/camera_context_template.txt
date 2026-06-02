@@ -1,0 +1,2 @@
+[Camera context]
+{assistant_note}{caption}

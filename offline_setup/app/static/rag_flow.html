@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RAG flow</title>
+  <style>
+    /* Match architecture_flow.html tokens and typography */
+    :root {
+      --bg: #0a0e14;
+      --panel: #121a24;
+      --text: #e6edf3;
+      --muted: #8b9cb3;
+      --accent: #58a6ff;
+      --flow: #3fb950;
+      --edge: #30363d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      text-align: left;
+    }
+    .wrap {
+      padding: 1rem;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+    /* Standalone: full-width diagram (maximum node size); Jump/details below the SVG */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+    /* Embedded on architecture-flow (?embed=diagram): diagram only — Jump lives on parent page */
+    body.embed-diagram .detail-pane {
+      display: none !important;
+    }
+    /* Same intro rhythm as architecture-flow section-intro */
+    .section-intro {
+      margin: 0 0 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .rag-diagram-wrap {
+      border: 1px solid var(--edge);
+      border-radius: 8px;
+      background: #0d1117;
+      overflow: hidden;
+    }
+    .rag-diagram-wrap svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .legend {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--edge);
+      border-radius: 8px;
+      background: #0d1117;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .legend strong { color: var(--text); }
+    .node[data-comp] {
+      cursor: pointer;
+    }
+    .node[data-comp]:focus {
+      outline: none;
+    }
+    .node[data-comp]:focus rect {
+      stroke: var(--accent);
+      stroke-width: 2;
+    }
+    .node rect {
+      fill: var(--panel);
+      stroke: var(--edge);
+      stroke-width: 1.5;
+      transition: stroke 0.15s, filter 0.15s;
+    }
+    .node.selected rect {
+      stroke: var(--accent);
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 10px rgba(88, 166, 255, 0.45));
+    }
+    .n-title {
+      fill: var(--text);
+      font-size: 11px;
+      font-weight: 600;
+      text-anchor: middle;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      pointer-events: none;
+    }
+    .n-sub {
+      fill: var(--muted);
+      font-size: 9px;
+      text-anchor: middle;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      pointer-events: none;
+    }
+    .flow-line {
+      fill: none;
+      stroke: var(--edge);
+      stroke-width: 2;
+      stroke-linecap: round;
+      marker-end: url(#arr);
+    }
+    .flow-dash {
+      fill: none;
+      stroke: var(--flow);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 12 18;
+      animation: march 1.2s linear infinite;
+      opacity: 0.85;
+    }
+    @keyframes march {
+      to { stroke-dashoffset: -30; }
+    }
+    .detail-pane {
+      border: 1px solid var(--edge);
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 1rem 1.1rem;
+    }
+    .detail-pane h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.02em;
+    }
+    .detail-toolbar {
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--edge);
+    }
+    .detail-toolbar label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.35rem;
+    }
+    .detail-toolbar select {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid var(--edge);
+      background: #0d1117;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    .detail-content {
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+    .detail-content p {
+      margin: 0 0 0.65rem;
+    }
+    .detail-content ul {
+      margin: 0.35rem 0 0.75rem 1.1rem;
+      padding: 0;
+    }
+    .detail-content li {
+      margin-bottom: 0.35rem;
+    }
+    .detail-content code {
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 0.82em;
+      background: #0d1117;
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid #21262d;
+      color: #c9d1d9;
+    }
+    .detail-content .meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .detail-placeholder {
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="section-intro" id="ragStandaloneNote">
+      RAG ingest, indexing (SQLite FTS5), retrieval, and snippet injection — aligned with <strong>Stack architecture</strong> styling.
+    </p>
+    <div class="layout">
+      <div class="diagram-col">
+        <div class="rag-diagram-wrap">
+    <svg viewBox="0 0 980 380" xmlns="http://www.w3.org/2000/svg" aria-label="RAG flow">
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#30363d" />
+        </marker>
+      </defs>
+
+      <path class="flow-line" d="M 130 95 L 260 95" />
+      <path class="flow-dash" d="M 130 95 L 260 95" />
+      <path class="flow-line" d="M 360 95 L 510 95" />
+      <path class="flow-dash" d="M 360 95 L 510 95" style="animation-delay:-0.15s" />
+      <path class="flow-line" d="M 610 95 L 760 95" />
+      <path class="flow-dash" d="M 610 95 L 760 95" style="animation-delay:-0.3s" />
+
+      <path class="flow-line" d="M 130 250 L 260 250" />
+      <path class="flow-dash" d="M 130 250 L 260 250" style="animation-delay:-0.45s" />
+      <path class="flow-line" d="M 360 250 L 510 250" />
+      <path class="flow-dash" d="M 360 250 L 510 250" style="animation-delay:-0.6s" />
+      <path class="flow-line" d="M 610 250 L 760 250" />
+      <path class="flow-dash" d="M 610 250 L 760 250" style="animation-delay:-0.75s" />
+
+      <g class="node" data-comp="sources" tabindex="0" role="button" aria-label="Sources — details" transform="translate(20, 55)">
+        <rect width="110" height="80" rx="10" />
+        <text class="n-title" x="55" y="28">Sources</text>
+        <text class="n-sub" x="55" y="45">documents/</text>
+        <text class="n-sub" x="55" y="59">from_chat/</text>
+      </g>
+
+      <g class="node" data-comp="ingest" tabindex="0" role="button" aria-label="Ingest — details" transform="translate(260, 55)">
+        <rect width="120" height="80" rx="10" />
+        <text class="n-title" x="60" y="28">Ingest</text>
+        <text class="n-sub" x="60" y="45">/api/rag/ingest</text>
+        <text class="n-sub" x="60" y="58">pipecat_offline_patch.py</text>
+      </g>
+
+      <g class="node" data-comp="chunker" tabindex="0" role="button" aria-label="Chunker — details" transform="translate(510, 55)">
+        <rect width="150" height="80" rx="10" />
+        <text class="n-title" x="75" y="28">Chunker</text>
+        <text class="n-sub" x="75" y="45">local_rag.py::_chunk_text</text>
+        <text class="n-sub" x="75" y="58">1200 / overlap 200</text>
+      </g>
+
+      <g class="node" data-comp="fts-index" tabindex="0" role="button" aria-label="SQLite FTS5 index — details" transform="translate(760, 55)">
+        <rect width="200" height="80" rx="10" />
+        <text class="n-title" x="100" y="28">SQLite FTS5 index</text>
+        <text class="n-sub" x="100" y="45">rag_data/index.sqlite</text>
+        <text class="n-sub" x="100" y="58">WRITE: local_rag.ingest_file()</text>
+      </g>
+
+      <g class="node" data-comp="query" tabindex="0" role="button" aria-label="Query — details" transform="translate(20, 210)">
+        <rect width="110" height="80" rx="10" />
+        <text class="n-title" x="55" y="28">Query</text>
+        <text class="n-sub" x="55" y="45">text / voice</text>
+        <text class="n-sub" x="55" y="58">voice+vision</text>
+      </g>
+
+      <g class="node" data-comp="agent" tabindex="0" role="button" aria-label="Agent — details" transform="translate(260, 210)">
+        <rect width="140" height="80" rx="10" />
+        <text class="n-title" x="70" y="28">Agent</text>
+        <text class="n-sub" x="70" y="45">text_chat_agent.py</text>
+        <text class="n-sub" x="70" y="58">local tools loop</text>
+      </g>
+
+      <g class="node" data-comp="search-kb" tabindex="0" role="button" aria-label="search_knowledge_base — details" transform="translate(510, 210)">
+        <rect width="170" height="80" rx="10" />
+        <text class="n-title" x="85" y="28">search_knowledge_base</text>
+        <text class="n-sub" x="85" y="45">local_rag.py</text>
+        <text class="n-sub" x="85" y="58">READ: FTS query/snippet</text>
+      </g>
+
+      <g class="node" data-comp="snippet-injection" tabindex="0" role="button" aria-label="Snippet injection — details" transform="translate(760, 210)">
+        <rect width="200" height="80" rx="10" />
+        <text class="n-title" x="100" y="28">Snippet injection</text>
+        <text class="n-sub" x="100" y="45">text_chat_agent.py + bot_vllm.py</text>
+        <text class="n-sub" x="100" y="58">response grounding</text>
+      </g>
+
+      <text class="n-sub" x="490" y="348" text-anchor="middle">Attachment mirror: chat_attachments.py → rag_data/from_chat/</text>
+    </svg>
+        </div>
+        <div class="legend" id="ragLegend">
+          <strong>Scope:</strong> ingest + indexing + retrieval for text, voice, and voice+vision. Script references are inline on nodes.
+        </div>
+      </div>
+
+      <aside class="detail-pane" id="detailPane" aria-live="polite">
+        <div class="detail-toolbar">
+          <label for="compJump">Jump to component</label>
+          <select id="compJump" aria-label="Select RAG component for details">
+            <option value="">— Choose —</option>
+            <option value="sources">Sources</option>
+            <option value="ingest">Ingest</option>
+            <option value="chunker">Chunker</option>
+            <option value="fts-index">SQLite FTS5 index</option>
+            <option value="query">Query</option>
+            <option value="agent">Agent</option>
+            <option value="search-kb">search_knowledge_base</option>
+            <option value="snippet-injection">Snippet injection</option>
+          </select>
+        </div>
+        <h2 id="detailTitle">Details</h2>
+        <div id="detailContent" class="detail-content">
+          <p class="detail-placeholder">Select a component above or click a box in the diagram.</p>
+        </div>
+        <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite">Checking security mode…</div>
+      </aside>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var embedDiagram = params.get("embed") === "diagram";
+      if (embedDiagram) {
+        document.body.classList.add("embed-diagram");
+      }
+
+      const DETAILS = {
+        sources: {
+          title: "Sources",
+          html: `
+            <p class="meta">Filesystem roots scanned or mirrored into RAG.</p>
+            <ul>
+              <li><code>documents/</code> — primary offline corpus for ingest</li>
+              <li><code>from_chat/</code> — attachments mirrored from chat for retrieval</li>
+              <li>Paths are configured under the offline RAG data layout (<code>rag_data/</code>)</li>
+            </ul>
+          `,
+        },
+        ingest: {
+          title: "Ingest",
+          html: `
+            <p class="meta">HTTP entry for adding or refreshing indexed files.</p>
+            <ul>
+              <li><code>POST /api/rag/ingest</code> — triggers chunking + FTS upsert</li>
+              <li>Wiring extended via <code>pipecat_offline_patch.py</code> with the rest of the offline stack</li>
+              <li>Calls into <code>local_rag.ingest_file()</code> for SQLite writes</li>
+            </ul>
+          `,
+        },
+        chunker: {
+          title: "Chunker",
+          html: `
+            <p class="meta">Splits raw text before indexing.</p>
+            <ul>
+              <li><code>local_rag.py::_chunk_text</code></li>
+              <li>Typical window <strong>1200</strong> characters, overlap <strong>200</strong> (see inline node)</li>
+              <li>Output chunks feed the FTS5 index rows</li>
+            </ul>
+          `,
+        },
+        "fts-index": {
+          title: "SQLite FTS5 index",
+          html: `
+            <p class="meta">Searchable store for retrieval snippets.</p>
+            <ul>
+              <li>Database file: <code>rag_data/index.sqlite</code></li>
+              <li><strong>WRITE</strong> path: <code>local_rag.ingest_file()</code> during ingest</li>
+              <li>FTS5 used for token search and snippet extraction</li>
+            </ul>
+          `,
+        },
+        query: {
+          title: "Query",
+          html: `
+            <p class="meta">User or upstream modality feeding the agent.</p>
+            <ul>
+              <li><strong>Text</strong> — Assistant / text chat completions path</li>
+              <li><strong>Voice</strong> — transcripts from the voice pipeline</li>
+              <li><strong>Voice+vision</strong> — same retrieval hook; multimodal context elsewhere in the stack</li>
+            </ul>
+          `,
+        },
+        agent: {
+          title: "Agent",
+          html: `
+            <p class="meta">Orchestrates tools and LLM calls for grounded answers.</p>
+            <ul>
+              <li><code>text_chat_agent.py</code> — local tool loop for chat</li>
+              <li>Invokes <code>search_knowledge_base</code> when RAG is needed</li>
+              <li>Merges snippets into the prompt before the dialogue model runs</li>
+            </ul>
+          `,
+        },
+        "search-kb": {
+          title: "search_knowledge_base",
+          html: `
+            <p class="meta">Retrieval bridge from the agent to the index.</p>
+            <ul>
+              <li>Implemented in <code>local_rag.py</code></li>
+              <li><strong>READ</strong>: FTS query + snippet construction</li>
+              <li>Returns text for snippet injection into the active conversation</li>
+            </ul>
+          `,
+        },
+        "snippet-injection": {
+          title: "Snippet injection",
+          html: `
+            <p class="meta">Grounds the model on retrieved passages.</p>
+            <ul>
+              <li>Wired through <code>text_chat_agent.py</code> and <code>bot_vllm.py</code> depending on path</li>
+              <li>Inserts retrieved snippets into context so responses cite local knowledge</li>
+              <li>Complements (does not replace) stack-level vision augment when enabled</li>
+            </ul>
+          `,
+        },
+      };
+
+      const jump = document.getElementById("compJump");
+      const titleEl = document.getElementById("detailTitle");
+      const contentEl = document.getElementById("detailContent");
+      const nodes = document.querySelectorAll(".node[data-comp]");
+
+      function setSelected(id) {
+        nodes.forEach((n) => n.classList.toggle("selected", n.getAttribute("data-comp") === id));
+      }
+
+      function showDetail(id) {
+        const d = DETAILS[id];
+        if (!d) {
+          if (!embedDiagram && titleEl && contentEl) {
+            titleEl.textContent = "Details";
+            contentEl.innerHTML = '<p class="detail-placeholder">Select a component above or click a box in the diagram.</p>';
+          }
+          setSelected(null);
+          if (!embedDiagram && jump) jump.value = "";
+          return;
+        }
+        if (!embedDiagram && titleEl && contentEl) {
+          titleEl.textContent = d.title;
+          contentEl.innerHTML = d.html;
+        }
+        setSelected(id);
+        if (!embedDiagram && jump) jump.value = id;
+      }
+
+      if (!embedDiagram && jump) {
+        jump.addEventListener("change", function () {
+          showDetail(this.value || null);
+        });
+      }
+
+      if (embedDiagram) {
+        window.addEventListener("message", function (e) {
+          var d = e.data;
+          if (!d || d.channel !== "rag-flow" || d.type !== "select") return;
+          setSelected(d.id || null);
+        });
+      }
+
+      nodes.forEach((node) => {
+        node.addEventListener("click", function (e) {
+          e.preventDefault();
+          const id = node.getAttribute("data-comp");
+          if (embedDiagram && window.parent !== window) {
+            setSelected(id);
+            window.parent.postMessage({ channel: "rag-flow", type: "pick", id: id }, "*");
+            return;
+          }
+          showDetail(id);
+        });
+        node.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            var id = node.getAttribute("data-comp");
+            if (embedDiagram && window.parent !== window) {
+              setSelected(id);
+              window.parent.postMessage({ channel: "rag-flow", type: "pick", id: id }, "*");
+              return;
+            }
+            showDetail(id);
+          }
+        });
+      });
+
+      if (window.self !== window.top) {
+        var n = document.getElementById("ragStandaloneNote");
+        if (n) n.style.display = "none";
+        var leg = document.getElementById("ragLegend");
+        if (leg) leg.style.display = "none";
+        var w = document.querySelector(".wrap");
+        if (w) w.style.padding = "0.5rem";
+      }
+    })();
+  </script>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

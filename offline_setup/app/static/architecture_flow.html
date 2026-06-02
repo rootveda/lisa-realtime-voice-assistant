@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lisa offline stack — architecture flow</title>
+  <style>
+    :root {
+      --bg: #06080c;
+      --bg-surface: #0c1018;
+      --panel: #121a26;
+      --panel-inner: #0d1219;
+      --text: #f0f4f8;
+      --muted: #8b9aad;
+      --accent: #58a6ff;
+      --accent-dim: rgba(88, 166, 255, 0.12);
+      --flow: #3fb950;
+      --edge: #2d3642;
+      --edge-strong: #3d4a5c;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(88, 166, 255, 0.08), transparent 55%),
+        radial-gradient(ellipse 80% 50% at 100% 50%, rgba(63, 185, 80, 0.04), transparent 50%);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      text-align: left;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .flow-dash { animation: none !important; }
+      .pulse { animation: none !important; opacity: 0.35; }
+    }
+    .site-header {
+      padding: 1.35rem 0 1.5rem;
+      border-bottom: 1px solid var(--edge);
+      background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(6, 8, 12, 0.92) 100%);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+    .header-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 0 1.25rem;
+    }
+    .site-header .eyebrow {
+      display: block;
+      margin: 0 0 0.35rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .site-header h1 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.2rem, 2.5vw, 1.45rem);
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+    .site-header .lede {
+      margin: 0;
+      max-width: 52rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+    .site-header .lede strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .wrap {
+      padding: 1.25rem;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+    .arch-toc {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 0.75rem;
+      margin-bottom: 1.35rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--edge);
+      background: var(--accent-dim);
+    }
+    .arch-toc-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .arch-toc a {
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .arch-toc a:hover {
+      background: rgba(88, 166, 255, 0.18);
+      color: #9ecbff;
+    }
+    /* Two bands: Stack row | RAG row — each inspector aligns with its diagram (not stacked top-right). */
+    .page-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+    .page-grid-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+      gap: 1.35rem;
+      align-items: start;
+    }
+    .page-primary {
+      min-width: 0;
+    }
+    .detail-pane-context {
+      margin: 0 0 0.5rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    @media (max-width: 900px) {
+      .page-grid-row {
+        grid-template-columns: 1fr;
+      }
+      .detail-pane {
+        position: static;
+        max-height: none;
+      }
+    }
+    .flow-card {
+      border-radius: var(--radius);
+      border: 1px solid var(--edge);
+      background: linear-gradient(165deg, var(--panel) 0%, var(--bg-surface) 100%);
+      box-shadow: var(--shadow), var(--shadow-inset);
+      overflow: hidden;
+    }
+    .flow-card__bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem 1rem;
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--edge);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .flow-card__tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .flow-card__tag::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--flow);
+      box-shadow: 0 0 10px var(--flow);
+    }
+    .flow-card__hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .flow-card__body {
+      padding: 1rem 1rem 1.15rem;
+    }
+    .flow-card--rag .flow-card__body {
+      padding-top: 0;
+    }
+    .rag-section-intro {
+      margin: 0 1rem 0.9rem;
+      max-width: 50rem;
+    }
+    .diagram-col svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .diagram-shell {
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--edge-strong);
+      background: var(--panel-inner);
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+    }
+    .node[data-comp] {
+      cursor: pointer;
+    }
+    .node[data-comp]:focus {
+      outline: none;
+    }
+    .node[data-comp]:focus rect {
+      stroke: var(--accent);
+      stroke-width: 2;
+    }
+    .node rect, .node path.bg {
+      fill: var(--panel);
+      stroke: var(--edge);
+      stroke-width: 1.5;
+      transition: stroke 0.15s, filter 0.15s;
+    }
+    .node.selected rect {
+      stroke: var(--accent);
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 10px rgba(88, 166, 255, 0.45));
+    }
+    .node text {
+      fill: var(--text);
+      font-size: 11px;
+      pointer-events: none;
+    }
+    .node .sub {
+      fill: var(--muted);
+      font-size: 9px;
+    }
+    .flow-line {
+      fill: none;
+      stroke: var(--edge);
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+    .flow-dash {
+      fill: none;
+      stroke: var(--flow);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 12 18;
+      animation: march 1.2s linear infinite;
+      opacity: 0.85;
+    }
+    @keyframes march {
+      to { stroke-dashoffset: -30; }
+    }
+    .pulse {
+      fill: var(--flow);
+      opacity: 0;
+      animation: pulse 8s steps(8, end) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0; }
+      5% { opacity: 1; }
+      12% { opacity: 0; }
+    }
+    .legend {
+      margin-top: 1rem;
+      padding: 0.85rem 1.05rem;
+      border: 1px solid var(--edge);
+      border-radius: var(--radius-sm);
+      background: rgba(13, 17, 25, 0.85);
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.55;
+    }
+    .legend strong { color: var(--text); font-weight: 600; }
+    .diagram-caption-bg {
+      fill: #0d1117;
+      stroke: var(--edge);
+      stroke-width: 1;
+    }
+    .detail-pane {
+      border: 1px solid var(--edge);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, var(--panel) 0%, var(--bg-surface) 100%);
+      padding: 1.1rem 1.15rem 1.2rem;
+      box-shadow: var(--shadow-inset);
+    }
+    .detail-pane h2 {
+      margin: 0 0 0.65rem;
+      font-size: 1.1rem;
+      font-weight: 650;
+      color: var(--accent);
+      letter-spacing: -0.01em;
+    }
+    .detail-toolbar {
+      margin-bottom: 1.05rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--edge);
+    }
+    .detail-toolbar label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.45rem;
+    }
+    .detail-toolbar select {
+      width: 100%;
+      padding: 0.55rem 0.7rem;
+      border-radius: 8px;
+      border: 1px solid var(--edge-strong);
+      background: var(--panel-inner);
+      color: var(--text);
+      font-size: 0.92rem;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .detail-toolbar select:hover {
+      border-color: var(--accent);
+    }
+    .detail-toolbar select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .detail-content {
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+    .detail-content p {
+      margin: 0 0 0.65rem;
+    }
+    .detail-content ul {
+      margin: 0.35rem 0 0.75rem 1.1rem;
+      padding: 0;
+    }
+    .detail-content li {
+      margin-bottom: 0.35rem;
+    }
+    .detail-content code {
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 0.82em;
+      background: #0d1117;
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid #21262d;
+      color: #c9d1d9;
+    }
+    .detail-content .meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .detail-placeholder {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .section-block {
+      margin: 0;
+      padding: 0;
+      border: none;
+      scroll-margin-top: 1rem;
+    }
+    .section-block h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.08rem;
+      font-weight: 650;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    .section-intro {
+      margin: 0 0 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .section-intro code {
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 0.82em;
+      background: #0d1117;
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+      border: 1px solid #21262d;
+      color: #c9d1d9;
+    }
+    .stack-flow-section {
+      margin: 0;
+    }
+    /* RAG title only on the left — Jump lives in the inspector (same pattern as Stack). */
+    .rag-section-title {
+      margin: 0;
+      padding: 0.85rem 1rem 0.35rem;
+      font-size: 1.08rem;
+      font-weight: 650;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      border-bottom: 1px solid var(--edge);
+      background: rgba(0, 0, 0, 0.12);
+    }
+    .rag-arch-frame-wrap {
+      position: relative;
+      margin: 0 1rem 1rem;
+      width: calc(100% - 2rem);
+      height: min(640px, 78vh);
+      min-height: 520px;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--edge-strong);
+      background: var(--panel-inner);
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.35);
+    }
+    .rag-arch-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+    @media (max-width: 900px) {
+      .rag-arch-frame-wrap {
+        height: min(560px, 70vh);
+        min-height: 440px;
+        margin-left: 0.65rem;
+        margin-right: 0.65rem;
+        width: calc(100% - 1.3rem);
+      }
+      .rag-section-intro {
+        margin-left: 0.75rem;
+        margin-right: 0.75rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <span class="eyebrow">Offline reference</span>
+      <h1>Lisa offline stack — architecture flow</h1>
+      <p class="lede">
+        Explore how voice, vision, text chat, and RAG fit together. Click any diagram box or use <strong>Jump to component</strong> in the inspector.
+        Entry: HTTPS <strong>:7860</strong> → bot <strong>:7861</strong>.
+      </p>
+    </div>
+  </header>
+  <div class="wrap">
+    <nav class="arch-toc" aria-label="On this page">
+      <span class="arch-toc-label">On this page</span>
+      <a href="#stack-flow">Stack flow</a>
+      <a href="#rag-architecture-flow">RAG flow</a>
+    </nav>
+    <div class="page-stack">
+      <div class="page-grid-row">
+      <div class="page-primary">
+        <section id="stack-flow" class="flow-card stack-flow-section" aria-label="Stack component flow">
+          <div class="flow-card__bar">
+            <span class="flow-card__tag">Stack</span>
+            <span class="flow-card__hint">Voice · vision · text chat · TLS</span>
+          </div>
+          <div class="flow-card__body">
+          <div class="diagram-col">
+          <div class="diagram-shell">
+        <svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" aria-label="Architecture diagram">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#30363d" />
+            </marker>
+          </defs>
+
+          <path class="flow-line" d="M 120 160 L 240 160" marker-end="url(#arrow)" />
+          <path class="flow-dash" d="M 120 160 L 240 160" />
+
+          <path class="flow-line" d="M 340 160 L 460 160" marker-end="url(#arrow)" />
+          <path class="flow-dash" d="M 340 160 L 460 160" style="animation-delay: -0.15s" />
+
+          <path class="flow-line" d="M 560 160 L 560 260" marker-end="url(#arrow)" />
+          <path class="flow-dash" d="M 560 160 L 560 260" style="animation-delay: -0.3s" />
+
+          <path class="flow-line" d="M 580 310 L 720 310" marker-end="url(#arrow)" />
+          <path class="flow-dash" d="M 580 310 L 720 310" style="animation-delay: -0.45s" />
+
+          <path class="flow-line" d="M 390 310 L 520 310" marker-end="url(#arrow)" />
+          <path class="flow-dash" d="M 390 310 L 520 310" style="animation-delay: -0.6s" />
+
+          <path class="flow-line" d="M 320 160 L 320 260 L 360 260" marker-end="url(#arrow)" />
+          <path class="flow-dash" d="M 320 160 L 320 260 L 360 260" style="animation-delay: -0.2s" />
+
+          <path class="flow-line" d="M 260 360 L 260 420 L 720 420 L 720 340" marker-end="url(#arrow)" />
+          <path class="flow-dash" d="M 260 360 L 260 420 L 720 420 L 720 340" style="animation-delay: -0.5s" />
+
+          <path class="flow-line" d="M 120 220 L 240 220" stroke-dasharray="4 4" />
+          <text x="125" y="212" fill="#8b9cb3" font-size="10">JPEG /ws/mobile-voice-vision</text>
+
+          <g class="node" data-comp="browser" tabindex="0" role="button" aria-label="Browser — details" transform="translate(20,120)">
+            <rect width="100" height="80" rx="10" />
+            <text x="50" y="28" text-anchor="middle" font-weight="600">Browser</text>
+            <text class="sub" x="50" y="46" text-anchor="middle">Assistant Console</text>
+            <text class="sub" x="50" y="60" text-anchor="middle">PCM + JSON</text>
+          </g>
+
+          <g class="node" data-comp="tls" tabindex="0" role="button" aria-label="TLS proxy — details" transform="translate(240,120)">
+            <rect width="100" height="80" rx="10" />
+            <text x="50" y="28" text-anchor="middle" font-weight="600">TLS proxy</text>
+            <text class="sub" x="50" y="46" text-anchor="middle">:7860 → :7861</text>
+            <text class="sub" x="50" y="60" text-anchor="middle">tls_tcp_proxy</text>
+          </g>
+
+          <g class="node" data-comp="bot" tabindex="0" role="button" aria-label="Bot — details" transform="translate(460,120)">
+            <rect width="120" height="80" rx="10" />
+            <text x="60" y="28" text-anchor="middle" font-weight="600">bot_vllm.py</text>
+            <text class="sub" x="60" y="46" text-anchor="middle">FastAPI + Pipecat</text>
+            <text class="sub" x="60" y="60" text-anchor="middle">/ws /api/*</text>
+          </g>
+
+          <g class="node" data-comp="llm" tabindex="0" role="button" aria-label="Dialogue LLM — details" transform="translate(600,260)">
+            <rect width="140" height="88" rx="10" />
+            <text x="70" y="28" text-anchor="middle" font-weight="600">Dialogue LLM</text>
+            <text class="sub" x="70" y="44" text-anchor="middle">llama :8000</text>
+            <text class="sub" x="70" y="58" text-anchor="middle">or Ollama :11434</text>
+            <text class="sub" x="70" y="72" text-anchor="middle">OpenAI /v1</text>
+          </g>
+
+          <g class="node" data-comp="asr" tabindex="0" role="button" aria-label="Nemotron ASR — details" transform="translate(360,260)">
+            <rect width="120" height="88" rx="10" />
+            <text x="60" y="28" text-anchor="middle" font-weight="600">Nemotron ASR</text>
+            <text class="sub" x="60" y="44" text-anchor="middle">WebSocket</text>
+            <text class="sub" x="60" y="58" text-anchor="middle">Parakeet</text>
+            <text class="sub" x="60" y="72" text-anchor="middle">:8080</text>
+          </g>
+
+          <g class="node" data-comp="xtts" tabindex="0" role="button" aria-label="XTTS — details" transform="translate(720,260)">
+            <rect width="120" height="88" rx="10" />
+            <text x="60" y="28" text-anchor="middle" font-weight="600">XTTS</text>
+            <text class="sub" x="60" y="44" text-anchor="middle">HTTP synthesis</text>
+            <text class="sub" x="60" y="58" text-anchor="middle">:80</text>
+            <text class="sub" x="60" y="72" text-anchor="middle">audio → bot</text>
+          </g>
+
+          <g class="node" data-comp="vlm" tabindex="0" role="button" aria-label="Ollama VLM — details" transform="translate(140,360)">
+            <rect width="140" height="96" rx="10" />
+            <text x="70" y="28" text-anchor="middle" font-weight="600">Ollama VLM</text>
+            <text class="sub" x="70" y="44" text-anchor="middle">Vision captions</text>
+            <text class="sub" x="70" y="58" text-anchor="middle">/api/chat</text>
+            <text class="sub" x="70" y="72" text-anchor="middle">VISION_OLLAMA_*</text>
+            <text class="sub" x="70" y="86" text-anchor="middle">+ text augment path</text>
+          </g>
+
+          <g class="node" data-comp="vision-store" tabindex="0" role="button" aria-label="Vision session store — details" transform="translate(460,380)">
+            <rect width="200" height="56" rx="8" />
+            <text x="100" y="24" text-anchor="middle" font-weight="600">vision_session_store</text>
+            <text class="sub" x="100" y="42" text-anchor="middle">Last JPEG + caption / augment</text>
+          </g>
+
+          <circle class="pulse" cx="120" cy="160" r="5" style="animation-delay: 0s" />
+          <circle class="pulse" cx="280" cy="160" r="5" style="animation-delay: 1s" />
+          <circle class="pulse" cx="520" cy="160" r="5" style="animation-delay: 2s" />
+          <circle class="pulse" cx="560" cy="240" r="5" style="animation-delay: 3s" />
+          <circle class="pulse" cx="380" cy="310" r="5" style="animation-delay: 4s" />
+          <circle class="pulse" cx="640" cy="310" r="5" style="animation-delay: 5s" />
+          <circle class="pulse" cx="780" cy="310" r="5" style="animation-delay: 6s" />
+          <circle class="pulse" cx="210" cy="408" r="5" style="animation-delay: 7s" />
+
+          <g class="diagram-caption diagram-caption--voice" aria-hidden="true">
+            <rect class="diagram-caption-bg" x="158" y="86" width="644" height="26" rx="6" ry="6" />
+            <text x="480" y="103" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="600">
+              Voice path: mic → ASR → LLM → TTS → speaker
+            </text>
+          </g>
+          <g class="diagram-caption diagram-caption--vision" aria-hidden="true">
+            <rect class="diagram-caption-bg" x="130" y="337" width="700" height="22" rx="6" ry="6" />
+            <text x="480" y="355" text-anchor="middle" fill="#8b9cb3" font-size="11">
+              Vision path (optional): camera JPEGs → buffer → Ollama caption → injected into LLM context
+            </text>
+          </g>
+        </svg>
+          </div>
+
+        <div class="legend">
+          <strong>Text chat:</strong> POST <code>/api/text-chat/completions</code> → same dialogue LLM;
+          if “Camera for text chat” is on, the proxy augments the last user message using the vision buffer + Ollama caption.
+          Discovery: <code>/api/mobile-voice</code>, <code>/api/mobile-voice-vision</code>.
+        </div>
+          </div>
+          </div>
+        </section>
+      </div>
+      <aside class="detail-pane detail-pane--stack" id="detailPane" aria-live="polite" aria-label="Stack inspector">
+          <p class="detail-pane-context">Inspector · Stack</p>
+          <div class="detail-toolbar">
+            <label for="compJump">Jump to component</label>
+            <select id="compJump" aria-label="Select stack component for details">
+              <option value="">— Choose —</option>
+              <option value="browser">Browser</option>
+              <option value="tls">TLS proxy</option>
+              <option value="bot">bot_vllm (FastAPI)</option>
+              <option value="asr">Nemotron ASR</option>
+              <option value="llm">Dialogue LLM</option>
+              <option value="xtts">XTTS</option>
+              <option value="vlm">Ollama VLM</option>
+              <option value="vision-store">vision_session_store</option>
+            </select>
+          </div>
+          <h2 id="detailTitle">Details</h2>
+          <div id="detailContent" class="detail-content">
+            <p class="detail-placeholder">Select a component above or click a box in the diagram.</p>
+          </div>
+          <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite">Checking security mode…</div>
+      </aside>
+    </div>
+    <div class="page-grid-row">
+      <div class="page-primary">
+        <section id="rag-architecture-flow" class="flow-card flow-card--rag section-block rag-arch-section" aria-labelledby="rag-arch-heading">
+          <div class="flow-card__bar">
+            <span class="flow-card__tag">RAG</span>
+            <span class="flow-card__hint">Ingest · FTS5 · retrieval · grounding</span>
+          </div>
+          <h2 id="rag-arch-heading" class="rag-section-title">RAG architecture flow</h2>
+          <p class="section-intro rag-section-intro">
+            Offline ingest, chunking (SQLite FTS5), retrieval, and snippet injection for text and voice paths.
+            Use <strong>Jump to component</strong> in the RAG inspector beside this diagram; details appear below it.
+            Standalone page: <code>GET /rag-flow</code>.
+          </p>
+          <div class="rag-arch-frame-wrap">
+            <iframe class="rag-arch-frame" src="/rag-flow?embed=diagram" title="RAG architecture flow diagram"></iframe>
+          </div>
+        </section>
+      </div>
+      <aside class="detail-pane detail-pane--rag" id="ragDetailPane" aria-live="polite" aria-label="RAG inspector">
+          <p class="detail-pane-context">Inspector · RAG</p>
+          <div class="detail-toolbar">
+            <label for="ragCompJump">Jump to component</label>
+            <select id="ragCompJump" aria-label="Select RAG component for details">
+              <option value="">— Choose —</option>
+              <option value="sources">Sources</option>
+              <option value="ingest">Ingest</option>
+              <option value="chunker">Chunker</option>
+              <option value="fts-index">SQLite FTS5 index</option>
+              <option value="query">Query</option>
+              <option value="agent">Agent</option>
+              <option value="search-kb">search_knowledge_base</option>
+              <option value="snippet-injection">Snippet injection</option>
+            </select>
+          </div>
+          <h2 id="ragDetailTitle">Details</h2>
+          <div id="ragDetailContent" class="detail-content">
+            <p class="detail-placeholder">Select a component above or click a box in the RAG diagram.</p>
+          </div>
+      </aside>
+    </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const DETAILS = {
+        browser: {
+          title: "Browser",
+          html: `
+            <p class="meta">Clients served over HTTPS from the stack entry port.</p>
+            <p><strong>Typical pages</strong></p>
+            <ul>
+              <li><code>/assistant-console</code> — Assistant Console (text + voice)</li>
+              <li><code>/mobile-voice-test</code>, <code>/mobile-voice-vision-test</code> — raw PCM / vision tests</li>
+              <li><code>/client</code> — Pipecat WebRTC playground</li>
+            </ul>
+            <p><strong>Protocols</strong></p>
+            <ul>
+              <li><code>wss://…/ws/mobile-voice</code> — binary PCM + JSON handshake</li>
+              <li>Optional <code>wss://…/ws/mobile-voice-vision?session_id=…</code> — JPEG frames</li>
+              <li>Same-origin <code>fetch</code> to <code>/api/*</code> (avoids mixed-content to local LLM)</li>
+            </ul>
+          `,
+        },
+        tls: {
+          title: "TLS proxy (tls_tcp_proxy.py)",
+          html: `
+            <p class="meta">Plain TCP TLS terminator in front of the bot.</p>
+            <ul>
+              <li>Listens on <code>:7860</code> (HTTPS/WSS) by default</li>
+              <li>Forwards bytes to the bot on <code>127.0.0.1:7861</code> — no HTTP rewriting</li>
+              <li>Uses dev certs under <code>offline_setup/certs/</code></li>
+              <li>Lets the browser use <code>https:</code> while the bot speaks plain HTTP on localhost</li>
+            </ul>
+          `,
+        },
+        bot: {
+          title: "bot_vllm.py (Pipecat + FastAPI)",
+          html: `
+            <p class="meta">Single process: voice pipeline + REST/WebSocket routes.</p>
+            <p><strong>Pipeline (voice)</strong></p>
+            <ul>
+              <li>VAD → NVIDIA WebSocket STT → (optional) vision enrich → OpenAI-compatible LLM → XTTS HTTP → PCM out</li>
+              <li><code>RTVIProcessor</code> for client events and transcripts</li>
+            </ul>
+            <p><strong>Notable routes</strong></p>
+            <ul>
+              <li><code>/ws/mobile-voice</code>, <code>/ws/mobile-voice-vision</code></li>
+              <li><code>/api/text-chat/completions</code> — proxy + vision augment</li>
+              <li><code>/api/vision/preview</code>, <code>/api/runtime-status</code>, discovery JSON</li>
+            </ul>
+            <p>Offline extensions come from <code>pipecat_offline_patch.py</code> (imported at startup).</p>
+          `,
+        },
+        asr: {
+          title: "Nemotron ASR",
+          html: `
+            <p class="meta">Streaming speech-to-text for the voice bot.</p>
+            <ul>
+              <li>Default URL: WebSocket on <code>:8080</code> (Nemotron / Parakeet stack)</li>
+              <li>Env: <code>NVIDIA_ASR_URL</code> (see <code>start_current_stack.sh</code>)</li>
+              <li>Emits partial/final transcripts into the Pipecat pipeline</li>
+            </ul>
+          `,
+        },
+        llm: {
+          title: "Dialogue LLM",
+          html: `
+            <p class="meta">OpenAI-compatible chat completions for conversation.</p>
+            <ul>
+              <li><strong>Primary:</strong> local <code>llama-server</code> in Docker — <code>http://127.0.0.1:8000/v1</code> when the GGUF + image exist</li>
+              <li><strong>Fallback:</strong> Ollama <code>http://127.0.0.1:11434/v1</code></li>
+              <li>Env: <code>NVIDIA_LLM_URL</code>, <code>NVIDIA_LLM_MODEL</code></li>
+              <li>Separate from vision captioning (may still be Ollama on another path when primary is local llama)</li>
+            </ul>
+          `,
+        },
+        xtts: {
+          title: "XTTS (TTS)",
+          html: `
+            <p class="meta">HTTP text-to-speech used by the bot.</p>
+            <ul>
+              <li>Default: <code>http://127.0.0.1:80</code> — Coqui XTTS v2 in Docker</li>
+              <li>Env: <code>XTTS_TTS_URL</code>, <code>XTTS_VOICE_ID</code> (e.g. Andrew Chipper)</li>
+              <li>Bot concatenates streaming LLM text into sentences, then synthesizes audio back to the browser</li>
+            </ul>
+          `,
+        },
+        vlm: {
+          title: "Ollama VLM (vision captions)",
+          html: `
+            <p class="meta">Image understanding for captions — not always the same model as dialogue.</p>
+            <ul>
+              <li>Env: <code>VISION_OLLAMA_BASE</code>, <code>VISION_OLLAMA_MODEL</code>, <code>VISION_OLLAMA_TIMEOUT</code></li>
+              <li>Native <code>/api/chat</code> path in <code>vision_caption.py</code>; optional OpenAI-compat hop via <code>VISION_CAPTION_OPENAI_COMPAT</code></li>
+              <li>Voice: intent/policy may attach captions to context</li>
+              <li>Text chat: <code>vision_augment.py</code> can prepend <code>[Camera context]</code> when session + enable flags are set</li>
+            </ul>
+          `,
+        },
+        "vision-store": {
+          title: "vision_session_store",
+          html: `
+            <p class="meta">In-process buffer keyed by <code>vision_session_id</code>.</p>
+            <ul>
+              <li>JPEGs arrive on <code>/ws/mobile-voice-vision</code> (same ID as query param)</li>
+              <li>Holds recent frame(s) for captioning and for text-chat augmentation</li>
+              <li>Prefs such as every-turn vs regex-only can be tied to session (see vision client prefs)</li>
+            </ul>
+          `,
+        },
+      };
+
+      const RAG_DETAILS = {
+        sources: {
+          title: "Sources",
+          html: `
+            <p class="meta">Filesystem roots scanned or mirrored into RAG.</p>
+            <ul>
+              <li><code>documents/</code> — primary offline corpus for ingest</li>
+              <li><code>from_chat/</code> — attachments mirrored from chat for retrieval</li>
+              <li>Paths are configured under the offline RAG data layout (<code>rag_data/</code>)</li>
+            </ul>
+          `,
+        },
+        ingest: {
+          title: "Ingest",
+          html: `
+            <p class="meta">HTTP entry for adding or refreshing indexed files.</p>
+            <ul>
+              <li><code>POST /api/rag/ingest</code> — triggers chunking + FTS upsert</li>
+              <li>Wiring extended via <code>pipecat_offline_patch.py</code> with the rest of the offline stack</li>
+              <li>Calls into <code>local_rag.ingest_file()</code> for SQLite writes</li>
+            </ul>
+          `,
+        },
+        chunker: {
+          title: "Chunker",
+          html: `
+            <p class="meta">Splits raw text before indexing.</p>
+            <ul>
+              <li><code>local_rag.py::_chunk_text</code></li>
+              <li>Typical window <strong>1200</strong> characters, overlap <strong>200</strong> (see inline node)</li>
+              <li>Output chunks feed the FTS5 index rows</li>
+            </ul>
+          `,
+        },
+        "fts-index": {
+          title: "SQLite FTS5 index",
+          html: `
+            <p class="meta">Searchable store for retrieval snippets.</p>
+            <ul>
+              <li>Database file: <code>rag_data/index.sqlite</code></li>
+              <li><strong>WRITE</strong> path: <code>local_rag.ingest_file()</code> during ingest</li>
+              <li>FTS5 used for token search and snippet extraction</li>
+            </ul>
+          `,
+        },
+        query: {
+          title: "Query",
+          html: `
+            <p class="meta">User or upstream modality feeding the agent.</p>
+            <ul>
+              <li><strong>Text</strong> — Assistant / text chat completions path</li>
+              <li><strong>Voice</strong> — transcripts from the voice pipeline</li>
+              <li><strong>Voice+vision</strong> — same retrieval hook; multimodal context elsewhere in the stack</li>
+            </ul>
+          `,
+        },
+        agent: {
+          title: "Agent",
+          html: `
+            <p class="meta">Orchestrates tools and LLM calls for grounded answers.</p>
+            <ul>
+              <li><code>text_chat_agent.py</code> — local tool loop for chat</li>
+              <li>Invokes <code>search_knowledge_base</code> when RAG is needed</li>
+              <li>Merges snippets into the prompt before the dialogue model runs</li>
+            </ul>
+          `,
+        },
+        "search-kb": {
+          title: "search_knowledge_base",
+          html: `
+            <p class="meta">Retrieval bridge from the agent to the index.</p>
+            <ul>
+              <li>Implemented in <code>local_rag.py</code></li>
+              <li><strong>READ</strong>: FTS query + snippet construction</li>
+              <li>Returns text for snippet injection into the active conversation</li>
+            </ul>
+          `,
+        },
+        "snippet-injection": {
+          title: "Snippet injection",
+          html: `
+            <p class="meta">Grounds the model on retrieved passages.</p>
+            <ul>
+              <li>Wired through <code>text_chat_agent.py</code> and <code>bot_vllm.py</code> depending on path</li>
+              <li>Inserts retrieved snippets into context so responses cite local knowledge</li>
+              <li>Complements (does not replace) stack-level vision augment when enabled</li>
+            </ul>
+          `,
+        },
+      };
+
+      const jump = document.getElementById("compJump");
+      const titleEl = document.getElementById("detailTitle");
+      const contentEl = document.getElementById("detailContent");
+      const nodes = document.querySelectorAll(".node[data-comp]");
+
+      function setSelected(id) {
+        nodes.forEach((n) => n.classList.toggle("selected", n.getAttribute("data-comp") === id));
+      }
+
+      function showDetail(id) {
+        const d = DETAILS[id];
+        if (!d) {
+          titleEl.textContent = "Details";
+          contentEl.innerHTML = '<p class="detail-placeholder">Select a component above or click a box in the diagram.</p>';
+          setSelected(null);
+          jump.value = "";
+          return;
+        }
+        titleEl.textContent = d.title;
+        contentEl.innerHTML = d.html;
+        setSelected(id);
+        jump.value = id;
+      }
+
+      jump.addEventListener("change", function () {
+        showDetail(this.value || null);
+      });
+
+      nodes.forEach((node) => {
+        node.addEventListener("click", function (e) {
+          e.preventDefault();
+          const id = node.getAttribute("data-comp");
+          showDetail(id);
+        });
+        node.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            showDetail(node.getAttribute("data-comp"));
+          }
+        });
+      });
+
+      const ragJump = document.getElementById("ragCompJump");
+      const ragTitleEl = document.getElementById("ragDetailTitle");
+      const ragContentEl = document.getElementById("ragDetailContent");
+      const ragFrame = document.querySelector(".rag-arch-frame");
+
+      function postRagSelectToIframe(id) {
+        if (!ragFrame || !ragFrame.contentWindow) return;
+        ragFrame.contentWindow.postMessage({ channel: "rag-flow", type: "select", id: id || null }, "*");
+      }
+
+      function showRagDetail(id) {
+        const d = RAG_DETAILS[id];
+        if (!d) {
+          ragTitleEl.textContent = "Details";
+          ragContentEl.innerHTML = '<p class="detail-placeholder">Select a component above or click a box in the RAG diagram.</p>';
+          ragJump.value = "";
+          postRagSelectToIframe(null);
+          return;
+        }
+        ragTitleEl.textContent = d.title;
+        ragContentEl.innerHTML = d.html;
+        ragJump.value = id;
+        postRagSelectToIframe(id);
+      }
+
+      ragJump.addEventListener("change", function () {
+        showRagDetail(this.value || null);
+      });
+
+      window.addEventListener("message", function (e) {
+        const d = e.data;
+        if (!d || d.channel !== "rag-flow" || d.type !== "pick") return;
+        if (!ragFrame || e.source !== ragFrame.contentWindow) return;
+        const id = d.id;
+        const rd = RAG_DETAILS[id];
+        if (!rd) return;
+        ragTitleEl.textContent = rd.title;
+        ragContentEl.innerHTML = rd.html;
+        ragJump.value = id;
+      });
+    })();
+  </script>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

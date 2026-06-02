@@ -1,0 +1,4 @@
+
+
+[Vision policy — user message]
+In this same user message, under [Camera context], the observation is exactly one of the unavailable lines (`[Camera: no recent frame]` or `[Camera: caption unavailable]`). In one short spoken sentence: the live scene summary did not come through—invite them to try again in a moment. Do not claim their physical camera is broken, unplugged, or off unless they said so.

@@ -1,0 +1,60 @@
+# Kokoro TTS on GPU using Nemotron's CUDA 13 / Blackwell stack
+# Build: docker build -f Dockerfile.kokoro-gpu -t kokoro-gpu:blackwell .
+# Run:  docker run -d --name kokoro-tts --gpus all -p 8003:8880 kokoro-gpu:blackwell
+#
+# Requires: nemotron-unified:cuda13 already built (same PyTorch/CUDA 13 / sm_121)
+
+FROM nemotron-unified:cuda13
+
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
+
+# Clone Kokoro-FastAPI (GPU branch uses PyTorch - we keep base image's torch)
+RUN git clone --depth 1 https://github.com/remsky/Kokoro-FastAPI.git /app/kokoro-api && \
+    cd /app/kokoro-api && git config --global --add safe.directory /app/kokoro-api
+
+WORKDIR /app/kokoro-api
+
+# Install Python deps; do not reinstall torch/torchaudio (use base image's CUDA 13 build)
+RUN uv pip install --no-cache \
+    fastapi \
+    uvicorn[standard] \
+    python-multipart \
+    pydantic \
+    pydantic-settings \
+    huggingface_hub \
+    numpy \
+    scipy \
+    soundfile \
+    loguru \
+    && uv pip install --no-cache -e . --no-deps 2>/dev/null || true
+
+# Install api package (Kokoro-FastAPI) without pulling torch (keep base image CUDA 13 torch)
+RUN if [ -d api ]; then uv pip install --no-cache -e ./api --no-deps 2>/dev/null || true; fi
+
+# Optional: download model at build time (pass --build-arg HUGGINGFACE_ACCESS_TOKEN=...)
+ARG HUGGINGFACE_ACCESS_TOKEN
+ENV HF_TOKEN=${HUGGINGFACE_ACCESS_TOKEN}
+RUN mkdir -p /app/kokoro-api/api/src/models/v1_0 && \
+    (cd /app/kokoro-api && [ -f docker/scripts/download_model.py ] && python docker/scripts/download_model.py --type pth) || \
+    (cd /app/kokoro-api && [ -f scripts/download_model.py ] && python scripts/download_model.py --type pth) || \
+    (python3 -c "
+import os
+try:
+    from huggingface_hub import hf_hub_download
+    tok = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_ACCESS_TOKEN')
+    if tok:
+        hf_hub_download(repo_id='hexgrad/Kokoro-82M', filename='v1_0/kokoro-v1_0.pth', local_dir='/app/kokoro-api/api/src/models', token=tok)
+except Exception as e:
+    print('Model download skipped:', e)
+" 2>/dev/null) || echo "Model not downloaded; build with --build-arg HUGGINGFACE_ACCESS_TOKEN=... or run download in container"
+
+EXPOSE 8880
+
+# Do NOT run start-gpu.sh (it overwrites torch with PyPI CUDA 12). Use base image torch and run api directly.
+RUN printf '%s\n' '#!/bin/bash' 'set -e' 'cd /app/kokoro-api' \
+    'if [ -d api ] && [ -f api/src/main.py ]; then cd api && exec python -m uvicorn src.main:app --host 0.0.0.0 --port 8880; fi' \
+    'if [ -f main.py ]; then exec python -m uvicorn main:app --host 0.0.0.0 --port 8880; fi' \
+    'echo "No entry point found" && exit 1' > /app/kokoro-api/run.sh && chmod +x /app/kokoro-api/run.sh
+
+CMD ["/app/kokoro-api/run.sh"]

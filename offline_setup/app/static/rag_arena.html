@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RAG Arena — Offline index</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #0f1629;
+      --line: #243357;
+      --glow: #45e6ff;
+      --text: #dff6ff;
+      --muted: #8cb8c7;
+      --ok: #68ff9b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(circle at 20% 10%, #12213f 0%, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 16px;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--glow);
+    }
+    a.nav-back {
+      padding: 8px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: var(--glow);
+      background: #0d1c34;
+      border: 1px solid #355a8a;
+      border-radius: 8px;
+    }
+    a.nav-back:hover { border-color: var(--glow); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      max-width: 1100px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(9, 15, 30, 0.92);
+      padding: 12px;
+    }
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--glow);
+    }
+    .stat-line {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 6px 0;
+      line-height: 1.45;
+    }
+    .stat-line strong {
+      color: var(--text);
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .paths-pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-size: 11px;
+      color: var(--text);
+    }
+    .row-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .row-btns button {
+      flex: 1 1 140px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #355a8a;
+      background: #0f1c34;
+      color: var(--glow);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .row-btns button:hover { border-color: var(--glow); }
+    label.k { font-size: 11px; color: var(--muted); display: block; margin-bottom: 6px; }
+    select, input[type="file"], input[type="text"] {
+      width: 100%;
+      margin-bottom: 8px;
+      background: #0b1426;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 12px;
+    }
+    #arenaMsg { font-size: 12px; margin-top: 8px; min-height: 1.2em; }
+    #arenaMsg.err { color: #ff8b7a; }
+    #arenaMsg.ok { color: var(--ok); }
+    .hint { font-size: 11px; color: var(--muted); line-height: 1.45; margin-top: 8px; }
+    .files-wrap { overflow: auto; max-height: 48vh; border: 1px solid var(--line); border-radius: 8px; }
+    table.files-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      min-width: 720px;
+    }
+    .files-table th, .files-table td {
+      border-bottom: 1px solid rgba(36, 51, 87, 0.65);
+      padding: 6px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .files-table th {
+      position: sticky;
+      top: 0;
+      background: #0d162b;
+      color: var(--glow);
+      z-index: 1;
+    }
+    .badge-ok { color: var(--ok); font-weight: 600; }
+    .badge-pending { color: #ffdb6e; font-weight: 600; }
+    .badge-failed { color: #ff8b7a; font-weight: 600; }
+    .badge-empty { color: #9eb4d4; font-weight: 600; }
+    .path-cell { word-break: break-all; max-width: 480px; }
+    .kpi-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0;
+    }
+    .kpi-chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      background: #0b1426;
+    }
+    .sort-legend {
+      margin-top: 4px;
+      margin-bottom: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .toolbar-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .ghost-btn {
+      border: 1px solid #355a8a;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--glow);
+      background: #0f1c34;
+      cursor: pointer;
+    }
+    .ghost-btn:hover { border-color: var(--glow); }
+    .danger-btn {
+      border: 1px solid #7d3f3f;
+      border-radius: 6px;
+      padding: 5px 8px;
+      background: #2a1313;
+      color: #ff9e9e;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+    }
+    .danger-btn:hover { border-color: #ff8b7a; color: #ffd0d0; }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 8, 18, 0.85);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .overlay.show { display: flex; }
+    .overlay-card {
+      border: 1px solid var(--line);
+      background: #0b1426;
+      border-radius: 12px;
+      padding: 16px;
+      width: min(520px, 92vw);
+      color: var(--text);
+      box-shadow: 0 0 24px rgba(69, 230, 255, 0.15);
+    }
+    .overlay-title { color: var(--glow); font-weight: 700; margin-bottom: 8px; }
+    .overlay-msg {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .overlay-actions {
+      margin-top: 14px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .overlay-actions button {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #355a8a;
+      background: #0f1c34;
+      color: var(--glow);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .overlay-actions button:hover { border-color: var(--glow); }
+    .overlay-actions .danger-confirm {
+      border-color: #7d3f3f;
+      background: #2a1313;
+      color: #ff9e9e;
+    }
+    .overlay-actions .danger-confirm:hover { border-color: #ff9e9e; }
+    .mini-btn {
+      border: 1px solid #355a8a;
+      border-radius: 6px;
+      padding: 6px 8px;
+      background: #0f1c34;
+      color: var(--glow);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+    }
+    .mini-btn:hover { border-color: var(--glow); }
+    .ghost-btn.on {
+      border-color: #6a4f24;
+      color: #ffdb6e;
+      background: #22190f;
+    }
+    .files-table th.sortable { cursor: pointer; user-select: none; }
+    .files-table th.sortable .arrow { opacity: 0.7; margin-left: 4px; font-size: 10px; }
+    .files-table tbody tr:nth-child(even) {
+      background: rgba(14, 24, 48, 0.45);
+    }
+    .files-table tbody tr:hover {
+      background: rgba(69, 230, 255, 0.08);
+    }
+    body.ops-compact { padding: 10px; }
+    body.ops-compact .card { padding: 8px; }
+    body.ops-compact .hint { display: none; }
+    .admin-token-toolbar {
+      display: none;
+      margin: 0 0 10px;
+      padding: 10px 12px;
+      border: 1px solid #8b5432;
+      border-radius: 8px;
+      background: #241810;
+      color: #ffc9a0;
+    }
+    .admin-token-toolbar label { display: block; margin: 0; font-size: 12px; line-height: 1.45; }
+    .admin-token-toolbar input {
+      width: 100%;
+      margin-top: 6px;
+      background: #0b1426;
+      color: var(--text);
+      border: 1px solid #8b5432;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>RAG Arena</h1>
+    <div class="toolbar-row">
+      <button class="ghost-btn" id="arenaOpsModeBtn" type="button">Ops mode: off</button>
+      <a class="nav-back" href="/architecture-flow#rag-architecture-flow">RAG architecture flow</a>
+      <a class="nav-back" href="/assistant-console">← Assistant Console</a>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Index status</h2>
+      <div class="stat-line"><strong>Dir paths in use</strong><div id="arenaPaths" class="paths-pre">Loading…</div></div>
+      <div class="stat-line"><strong>No. of files</strong><span id="arenaFiles">—</span></div>
+      <div class="stat-line"><strong>File types</strong><span id="arenaTypes">—</span></div>
+      <div class="stat-line"><strong>Total size</strong><span id="arenaSize">—</span></div>
+      <div class="stat-line"><strong>Files chunked / pending</strong><span id="arenaChunk">—</span></div>
+      <div class="stat-line"><strong>FTS chunk rows</strong><span id="arenaFts">—</span></div>
+      <div class="row-btns">
+        <button type="button" id="arenaSyncBtn">Sync RAG data</button>
+        <button type="button" id="arenaRebuildBtn">Rebuild the index</button>
+      </div>
+      <label id="arenaAdminTokenWrap" class="k" data-lisa-admin-token-wrap style="display:none;margin-top:10px;">
+        Admin token (required for delete / rebuild / upload in admin mode)
+        <input type="password" id="arenaAdminTokenInput" data-lisa-admin-token autocomplete="off" placeholder="Paste LISA_ADMIN_TOKEN from offline_setup/lisa_admin_token.env" style="width:100%;margin-top:4px;background:#0b1426;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px;font-family:ui-monospace,monospace;" />
+      </label>
+      <p id="arenaMsg"></p>
+      <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite">Checking security mode…</div>
+    </section>
+
+    <section class="card">
+      <h2>Upload to library</h2>
+      <label class="k">Destination</label>
+      <select id="arenaDest">
+        <option value="documents">documents/ (main library)</option>
+        <option value="from_chat">from_chat/arena_uploads (archive)</option>
+      </select>
+      <label class="k">Files (documents, images, media)</label>
+      <input id="arenaFilesInput" type="file" multiple accept=".md,.txt,.markdown,.pdf,.docx,.csv,.xlsx,.xls,.pptx,text/plain,text/markdown,application/pdf,image/*,audio/*,video/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.ico,.mp4,.webm,.mov,.mkv,.avi,.mp3,.wav,.ogg,.m4a,.flac,.opus" />
+      <div class="row-btns">
+        <button type="button" id="arenaUploadBtn">Upload &amp; index</button>
+      </div>
+      <p class="hint">
+        PDFs and Office files extract when optional deps are installed (<code>pypdf</code>, <code>python-docx</code>, <code>openpyxl</code>/<code>xlrd</code>, <code>python-pptx</code>). Images become searchable metadata (dimensions, format; no OCR). Audio/video upload stores size/MIME only — no offline transcription; add a separate transcript under <code>documents/</code> if you need speech in RAG.
+      </p>
+    </section>
+
+    <section class="card" style="grid-column: 1 / -1;">
+      <h2>Indexed / pending files</h2>
+      <div class="grid" style="grid-template-columns: 2fr 1fr 1fr; gap: 8px; max-width: none; margin-bottom: 8px;">
+        <div>
+          <label class="k">Filter by filename/path</label>
+          <input id="arenaFileFilter" type="text" placeholder="e.g. from_chat, .md, policy, project-x" />
+        </div>
+        <div>
+          <label class="k">Status</label>
+          <select id="arenaStatusFilter">
+            <option value="all">all</option>
+            <option value="chunked">chunked</option>
+            <option value="pending">pending</option>
+            <option value="failed">failed</option>
+            <option value="empty">empty</option>
+          </select>
+        </div>
+        <div>
+          <label class="k">Source</label>
+          <select id="arenaSourceFilter">
+            <option value="all">all</option>
+            <option value="documents">documents</option>
+            <option value="from_chat">from_chat</option>
+          </select>
+        </div>
+      </div>
+      <div class="kpi-row">
+        <span class="kpi-chip" id="arenaKpiVisible">Visible: 0</span>
+        <span class="kpi-chip" id="arenaKpiChunked">Chunked: 0</span>
+        <span class="kpi-chip" id="arenaKpiPending">Pending: 0</span>
+        <span class="kpi-chip" id="arenaKpiFailed">Failed: 0</span>
+        <span class="kpi-chip" id="arenaKpiEmpty">Empty: 0</span>
+        <span class="kpi-chip" id="arenaKpiSelected">Selected: 0</span>
+      </div>
+      <div class="sort-legend">Tip: click any column header to sort (click again to toggle direction).</div>
+      <div id="arenaAdminTokenWrapFiles" class="admin-token-toolbar" data-lisa-admin-token-wrap>
+        <label>
+          <strong>Admin token</strong> — paste <code>LISA_ADMIN_TOKEN</code> here before Delete (token value only, not the <code>export</code> line)
+          <input type="password" id="arenaAdminTokenInputToolbar" data-lisa-admin-token data-lisa-admin-token-focus autocomplete="off" placeholder="0a22c2c4…" />
+        </label>
+      </div>
+      <div class="toolbar-row">
+        <button class="mini-btn" type="button" id="arenaSelectVisibleBtn">Select visible</button>
+        <button class="mini-btn" type="button" id="arenaClearSelectionBtn">Clear selection</button>
+        <button class="danger-btn" type="button" id="arenaDeleteSelectedBtn">Delete selected</button>
+        <button class="danger-btn" type="button" id="arenaDeleteFilteredBtn">Delete filtered</button>
+        <button class="ghost-btn" type="button" id="arenaCsvBtn">Export CSV (filtered)</button>
+      </div>
+      <div class="files-wrap">
+        <table class="files-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="arenaSelectAllVisible" title="Select all visible rows" /></th>
+              <th class="sortable" data-sort="status">Status<span class="arrow"></span></th>
+              <th class="sortable" data-sort="name">Name<span class="arrow"></span></th>
+              <th class="sortable" data-sort="ext">Type<span class="arrow"></span></th>
+              <th class="sortable" data-sort="bytes">Size<span class="arrow"></span></th>
+              <th class="sortable" data-sort="mtime">Modified<span class="arrow"></span></th>
+              <th class="sortable" data-sort="path">Path<span class="arrow"></span></th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="arenaFilesTbody">
+            <tr><td colspan="8" style="color: var(--muted);">Loading files…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" style="grid-column: 1 / -1;">
+      <h2>Indexed/chunked file paths (sample) — total: <span id="arenaIndexedTotal">0</span></h2>
+      <p class="hint" style="margin-top:0;">
+        Recent indexed files used by retrieval. This is a sample view for fast operator validation.
+      </p>
+      <div id="arenaIndexedPaths" class="paths-pre">—</div>
+    </section>
+  </div>
+
+  <div id="arenaConfirm" class="overlay" aria-live="polite" aria-modal="true" role="dialog">
+    <div class="overlay-card">
+      <div id="arenaConfirmTitle" class="overlay-title">Confirm</div>
+      <div id="arenaConfirmMsg" class="overlay-msg"></div>
+      <div class="overlay-actions">
+        <button id="arenaConfirmCancelBtn" type="button">Cancel</button>
+        <button id="arenaConfirmOkBtn" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/lisa-admin-ui.js"></script>
+  <script>
+    if (typeof window.LisaAdminUI !== "object" || typeof window.LisaAdminUI.init !== "function") {
+      const _TOKEN_KEY = "assistantConsole.lisaAdminToken.v1";
+      window.LisaAdminUI = {
+        TOKEN_KEY: _TOKEN_KEY,
+        init: () => Promise.resolve(null),
+        tokenValue: () => {
+          try {
+            const inputs = document.querySelectorAll("[data-lisa-admin-token]");
+            for (const el of inputs) {
+              let v = String(el?.value || "").trim();
+              v = v.replace(/^export\s+LISA_ADMIN_TOKEN\s*=\s*/i, "").replace(/^Bearer\s+/i, "").replace(/[\r\n]+/g, "");
+              if (v) return v;
+            }
+            let saved = String(localStorage.getItem(_TOKEN_KEY) || "").trim();
+            saved = saved.replace(/^export\s+LISA_ADMIN_TOKEN\s*=\s*/i, "").replace(/^Bearer\s+/i, "");
+            return saved;
+          } catch (_) { return ""; }
+        },
+        persistToken: () => {
+          try {
+            const el = document.getElementById("arenaAdminTokenInput");
+            const tok = String(el?.value || "").trim();
+            if (tok) localStorage.setItem(_TOKEN_KEY, tok);
+          } catch (_) {}
+        },
+        adminHeaders: (extra) => {
+          const h = { ...(extra || {}) };
+          const tok = window.LisaAdminUI.tokenValue();
+          if (tok) {
+            h.Authorization = "Bearer " + tok;
+            h["X-Lisa-Admin-Token"] = tok;
+          }
+          return h;
+        },
+        refreshCapabilities: () => Promise.resolve({ admin_token_required: true }),
+        adminTokenRequired: () => true,
+        ensureAdminToken: async (label) => {
+          const tok = window.LisaAdminUI.tokenValue();
+          if (tok) return true;
+          await window.LisaAdminUI.showAuthError(`${label || "This action"} requires the admin token.`, label);
+          return false;
+        },
+        focusTokenField: () => {
+          const wrap = document.getElementById("arenaAdminTokenWrap");
+          const el = document.getElementById("arenaAdminTokenInput");
+          if (wrap) wrap.style.display = "block";
+          if (el) el.focus();
+        },
+        showNotice: (msg) => Promise.resolve(window.alert(msg)),
+        showAuthError: (msg) => Promise.resolve(window.alert(msg)),
+        checkAuthResponse: async (res, data) => {
+          if (!res || (res.status !== 401 && res.status !== 403)) return false;
+          await window.LisaAdminUI.showAuthError((data && data.error) || "Unauthorized.");
+          return true;
+        },
+        notifyError: async (msg) => { window.alert(msg); },
+        isAuthMessage: (m) => /authorization|admin token|unauthorized|forbidden/i.test(String(m || "")),
+      };
+    }
+
+    function formatBytes(n) {
+      if (n == null || !Number.isFinite(Number(n))) return "—";
+      let v = Number(n);
+      const u = ["B", "KB", "MB", "GB"];
+      let i = 0;
+      while (v >= 1024 && i < u.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      return `${v.toFixed(i ? 1 : 0)} ${u[i]}`;
+    }
+
+    const msgEl = document.getElementById("arenaMsg");
+    const arenaConfirmEl = document.getElementById("arenaConfirm");
+    const arenaConfirmTitleEl = document.getElementById("arenaConfirmTitle");
+    const arenaConfirmMsgEl = document.getElementById("arenaConfirmMsg");
+    const arenaConfirmCancelBtnEl = document.getElementById("arenaConfirmCancelBtn");
+    const arenaConfirmOkBtnEl = document.getElementById("arenaConfirmOkBtn");
+    let arenaFilesCache = [];
+    let selectedPaths = new Set();
+    let sortKey = "mtime";
+    let sortDir = "desc";
+    const LS = {
+      ops: "ragArena.opsMode.v1",
+      fileFilter: "ragArena.fileFilter.v1",
+      statusFilter: "ragArena.statusFilter.v1",
+      sourceFilter: "ragArena.sourceFilter.v1",
+      sortKey: "ragArena.sortKey.v1",
+      sortDir: "ragArena.sortDir.v1",
+    };
+    function formatRagIngestSummary(data) {
+      const parts = [];
+      const indexed = Number(data.indexed ?? 0);
+      const deduped = Number(data.deduped ?? 0);
+      const empty = Number(data.empty ?? 0);
+      const failed = Number(data.failed ?? 0);
+      const chunks = data.total_chunks ?? "?";
+      if (indexed) parts.push(`${indexed} indexed`);
+      if (deduped) parts.push(`${deduped} deduped`);
+      if (empty) parts.push(`${empty} empty`);
+      if (failed) parts.push(`${failed} failed`);
+      const head = parts.length ? parts.join(", ") : `${data.files ?? "?"} processed`;
+      let msg = `Rebuild: ${head}; ${chunks} chunks.`;
+      const issues = Array.isArray(data.issues) ? data.issues : [];
+      if (issues.length) {
+        const lines = issues.slice(0, 4).map((i) => {
+          const name = String(i.path || "").split("/").pop() || i.path || "?";
+          const err = i.error ? `: ${i.error}` : "";
+          return `${i.status} ${name}${err}`;
+        });
+        msg += ` Issues: ${lines.join(" · ")}`;
+        if (issues.length > 4) msg += ` (+${issues.length - 4} more)`;
+      }
+      return { msg, cls: failed > 0 ? "err" : "ok" };
+    }
+
+    function formatRagFileCounts(d) {
+      const chunked = d.files_chunked ?? "—";
+      const pending = d.files_pending ?? "—";
+      const failed = Number(d.files_failed ?? 0);
+      const empty = Number(d.files_empty ?? 0);
+      let line = `${chunked} chunked / ${pending} pending`;
+      if (failed || empty) {
+        const extra = [];
+        if (failed) extra.push(`${failed} failed`);
+        if (empty) extra.push(`${empty} empty`);
+        line += ` · ${extra.join(" · ")}`;
+      }
+      return line;
+    }
+
+    function setMsg(text, cls) {
+      msgEl.textContent = text || "";
+      msgEl.className = cls || "";
+    }
+
+    function openOverlayDialog(opts = {}) {
+      const title = opts.title || "Confirm";
+      const message = opts.message || "";
+      const okText = opts.okText || "OK";
+      const cancelText = opts.cancelText || "Cancel";
+      const danger = !!opts.danger;
+      return new Promise((resolve) => {
+        arenaConfirmTitleEl.textContent = title;
+        arenaConfirmMsgEl.textContent = message;
+        arenaConfirmOkBtnEl.textContent = okText;
+        arenaConfirmCancelBtnEl.textContent = cancelText;
+        arenaConfirmOkBtnEl.classList.toggle("danger-confirm", danger);
+        arenaConfirmEl.classList.add("show");
+
+        const done = (ok) => {
+          arenaConfirmEl.classList.remove("show");
+          arenaConfirmOkBtnEl.classList.remove("danger-confirm");
+          arenaConfirmOkBtnEl.removeEventListener("click", onOk);
+          arenaConfirmCancelBtnEl.removeEventListener("click", onCancel);
+          arenaConfirmEl.removeEventListener("click", onBackdrop);
+          document.removeEventListener("keydown", onKey);
+          resolve(!!ok);
+        };
+        const onOk = () => done(true);
+        const onCancel = () => done(false);
+        const onBackdrop = (e) => {
+          if (e.target === arenaConfirmEl) done(false);
+        };
+        const onKey = (e) => {
+          if (e.key === "Escape") done(false);
+          if (e.key === "Enter") done(true);
+        };
+        arenaConfirmOkBtnEl.addEventListener("click", onOk);
+        arenaConfirmCancelBtnEl.addEventListener("click", onCancel);
+        arenaConfirmEl.addEventListener("click", onBackdrop);
+        document.addEventListener("keydown", onKey);
+      });
+    }
+
+    async function confirmInPage(message, title = "Confirm", okText = "OK", danger = false) {
+      return openOverlayDialog({ message, title, okText, cancelText: "Cancel", danger });
+    }
+
+    async function syncStatus(opts) {
+      const keepMsg = opts && opts.keepMsg;
+      if (!keepMsg) setMsg("");
+      const pathsEl = document.getElementById("arenaPaths");
+      try {
+        const res = await fetch("/api/rag/status", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+        if (pathsEl) {
+          pathsEl.textContent =
+            `Library: ${d.documents_dir}\nChat mirror: ${d.from_chat_dir}\nIndex DB: ${d.db_path}`;
+        }
+        document.getElementById("arenaFiles").textContent = String(d.files_on_disk ?? "—");
+        const ext = d.extensions || {};
+        document.getElementById("arenaTypes").textContent = Object.keys(ext).length
+          ? Object.entries(ext).map(([k, v]) => `${k}: ${v}`).join(", ")
+          : "—";
+        document.getElementById("arenaSize").textContent = formatBytes(d.total_bytes);
+        document.getElementById("arenaChunk").textContent = formatRagFileCounts(d);
+        document.getElementById("arenaFts").textContent = String(d.chunks_total ?? d.chunks ?? "—");
+        await loadFilesTable();
+        renderIndexedPathsSample();
+        if (!keepMsg) setMsg("Status refreshed.", "ok");
+      } catch (e) {
+        const msg = String(e.message || e);
+        if (pathsEl) pathsEl.textContent = `RAG status failed: ${msg}`;
+        setMsg(msg, "err");
+      }
+    }
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = String(s ?? "");
+      return d.innerHTML;
+    }
+
+    function filteredArenaFiles() {
+      const q = (document.getElementById("arenaFileFilter").value || "").trim().toLowerCase();
+      const st = document.getElementById("arenaStatusFilter").value || "all";
+      const src = document.getElementById("arenaSourceFilter").value || "all";
+      return arenaFilesCache.filter((r) => {
+        const okStatus = st === "all" ? true : (String(r.status) === st);
+        if (!okStatus) return false;
+        const p = String(r.path || "");
+        const inDocs = p.includes("/rag_data/documents/");
+        const inChat = p.includes("/rag_data/from_chat/");
+        const okSource =
+          src === "all" ? true : src === "documents" ? inDocs : src === "from_chat" ? inChat : true;
+        if (!okSource) return false;
+        if (!q) return true;
+        const hay = `${r.name || ""} ${r.path || ""} ${r.ext || ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    function sortArenaFiles(rows) {
+      const arr = [...rows];
+      const mul = sortDir === "asc" ? 1 : -1;
+      arr.sort((a, b) => {
+        const av = a?.[sortKey];
+        const bv = b?.[sortKey];
+        if (sortKey === "bytes" || sortKey === "mtime") {
+          return (Number(av || 0) - Number(bv || 0)) * mul;
+        }
+        return String(av || "").localeCompare(String(bv || "")) * mul;
+      });
+      return arr;
+    }
+
+    function updateSortHeaderUI() {
+      document.querySelectorAll(".files-table th.sortable").forEach((th) => {
+        const arrow = th.querySelector(".arrow");
+        if (!arrow) return;
+        if (th.dataset.sort === sortKey) arrow.textContent = sortDir === "asc" ? "▲" : "▼";
+        else arrow.textContent = "";
+      });
+    }
+
+    function savePrefs() {
+      try {
+        localStorage.setItem(LS.ops, document.body.classList.contains("ops-compact") ? "1" : "0");
+        localStorage.setItem(LS.fileFilter, document.getElementById("arenaFileFilter").value || "");
+        localStorage.setItem(LS.statusFilter, document.getElementById("arenaStatusFilter").value || "all");
+        localStorage.setItem(LS.sourceFilter, document.getElementById("arenaSourceFilter").value || "all");
+        localStorage.setItem(LS.sortKey, sortKey);
+        localStorage.setItem(LS.sortDir, sortDir);
+      } catch (_) {}
+    }
+
+    function loadPrefs() {
+      try {
+        const ff = localStorage.getItem(LS.fileFilter);
+        const sf = localStorage.getItem(LS.statusFilter);
+        const src = localStorage.getItem(LS.sourceFilter);
+        const sk = localStorage.getItem(LS.sortKey);
+        const sd = localStorage.getItem(LS.sortDir);
+        const ops = localStorage.getItem(LS.ops);
+        if (ff != null) document.getElementById("arenaFileFilter").value = ff;
+        if (sf) document.getElementById("arenaStatusFilter").value = sf;
+        if (src) document.getElementById("arenaSourceFilter").value = src;
+        if (sk) sortKey = sk;
+        if (sd === "asc" || sd === "desc") sortDir = sd;
+        if (ops === "1") {
+          document.body.classList.add("ops-compact");
+          const btn = document.getElementById("arenaOpsModeBtn");
+          btn.textContent = "Ops mode: on";
+          btn.classList.add("on");
+        }
+      } catch (_) {}
+    }
+
+    function renderIndexedPathsSample() {
+      const el = document.getElementById("arenaIndexedPaths");
+      const totalEl = document.getElementById("arenaIndexedTotal");
+      if (!el) return;
+      const allChunked = arenaFilesCache.filter((f) => f.indexed);
+      if (totalEl) totalEl.textContent = String(allChunked.length);
+      const chunked = allChunked.slice(0, 12);
+      if (!chunked.length) {
+        el.textContent = "No chunked files.";
+        return;
+      }
+      el.textContent = chunked.map((f) => f.path).join("\n");
+    }
+
+    function updateSelectedKpi() {
+      const el = document.getElementById("arenaKpiSelected");
+      if (!el) return;
+      el.textContent = `Selected: ${selectedPaths.size}`;
+    }
+
+    function renderFilesTableRows() {
+      const tbody = document.getElementById("arenaFilesTbody");
+      const rows = sortArenaFiles(filteredArenaFiles());
+      const chunked = rows.filter((r) => r.status === "chunked").length;
+      const pending = rows.filter((r) => r.status === "pending").length;
+      const failed = rows.filter((r) => r.status === "failed").length;
+      const empty = rows.filter((r) => r.status === "empty").length;
+      document.getElementById("arenaKpiVisible").textContent = `Visible: ${rows.length}`;
+      document.getElementById("arenaKpiChunked").textContent = `Chunked: ${chunked}`;
+      document.getElementById("arenaKpiPending").textContent = `Pending: ${pending}`;
+      document.getElementById("arenaKpiFailed").textContent = `Failed: ${failed}`;
+      document.getElementById("arenaKpiEmpty").textContent = `Empty: ${empty}`;
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color: var(--muted);">No files match current filters.</td></tr>';
+        document.getElementById("arenaSelectAllVisible").checked = false;
+        return;
+      }
+      tbody.innerHTML = rows.map((r) => {
+        const badge = r.status === "chunked"
+          ? '<span class="badge-ok">chunked</span>'
+          : r.status === "failed"
+            ? '<span class="badge-failed" title="' + esc(r.reason || "indexing failed") + '">failed</span>'
+            : r.status === "empty"
+              ? '<span class="badge-empty" title="' + esc(r.reason || "no extractable text") + '">empty</span>'
+              : '<span class="badge-pending">pending</span>';
+        const mt = r.mtime ? new Date(Number(r.mtime) * 1000).toLocaleString() : "—";
+        const checked = selectedPaths.has(String(r.path || "")) ? "checked" : "";
+        return `<tr>
+          <td><input type="checkbox" class="arena-row-select" data-path="${esc(r.path)}" ${checked} /></td>
+          <td>${badge}</td>
+          <td>${esc(r.name)}</td>
+          <td>${esc(r.ext)}</td>
+          <td>${esc(formatBytes(r.bytes))}</td>
+          <td>${esc(mt)}</td>
+          <td class="path-cell">${esc(r.path)}</td>
+          <td><button type="button" class="danger-btn arena-delete-btn" data-path="${esc(r.path)}">Delete</button></td>
+        </tr>`;
+      }).join("");
+      const allVisibleSelected = rows.every((r) => selectedPaths.has(String(r.path || "")));
+      document.getElementById("arenaSelectAllVisible").checked = allVisibleSelected;
+      updateSortHeaderUI();
+      updateSelectedKpi();
+      savePrefs();
+    }
+
+    async function deleteArenaFile(path) {
+      if (!path) return;
+      if (!(await LisaAdminUI.ensureAdminToken("Delete file"))) return;
+      const ok = await confirmInPage(
+        `This removes the file from disk and the search index.\n\n${path}`,
+        "Delete file?",
+        "Delete",
+        true
+      );
+      if (!ok) return;
+      LisaAdminUI.persistToken();
+      setMsg("Deleting file…");
+      try {
+        const res = await fetch("/api/rag/remove", {
+          method: "POST",
+          headers: LisaAdminUI.adminHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ path }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (await LisaAdminUI.checkAuthResponse(res, data, "Delete file")) return;
+        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const shortPath = String(path).split("/").slice(-2).join("/");
+        setMsg(`Removed: ${shortPath}`, "ok");
+        await syncStatus({ keepMsg: true });
+      } catch (e) {
+        if (LisaAdminUI.isAuthMessage(e.message)) {
+          await LisaAdminUI.showAuthError(e.message, "Delete file");
+          return;
+        }
+        setMsg(String(e.message || e), "err");
+      }
+    }
+
+    function visibleRowsSorted() {
+      return sortArenaFiles(filteredArenaFiles());
+    }
+
+    function setVisibleSelection(on) {
+      for (const r of visibleRowsSorted()) {
+        const p = String(r.path || "");
+        if (!p) continue;
+        if (on) selectedPaths.add(p);
+        else selectedPaths.delete(p);
+      }
+      renderFilesTableRows();
+    }
+
+    async function deleteManyArenaFiles(paths, label) {
+      const uniq = [];
+      const seen = new Set();
+      for (const p of paths || []) {
+        const s = String(p || "");
+        if (!s || seen.has(s)) continue;
+        seen.add(s);
+        uniq.push(s);
+      }
+      if (!uniq.length) {
+        setMsg(`No files to delete (${label}).`, "err");
+        return;
+      }
+      if (!(await LisaAdminUI.ensureAdminToken("Delete files"))) return;
+      const ok = await confirmInPage(
+        `Delete ${uniq.length} file(s) from disk and the search index.\n\n${label}`,
+        "Delete files?",
+        "Delete",
+        true
+      );
+      if (!ok) return;
+      LisaAdminUI.persistToken();
+      setMsg(`Deleting ${uniq.length} file(s)…`);
+      try {
+        const res = await fetch("/api/rag/remove-many", {
+          method: "POST",
+          headers: LisaAdminUI.adminHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ paths: uniq }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (await LisaAdminUI.checkAuthResponse(res, data, "Delete files")) return;
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const removedCount = Number(data.removed_count || 0);
+        const failedCount = Number(data.failed_count || 0);
+        for (const p of uniq) selectedPaths.delete(p);
+        updateSelectedKpi();
+        if (failedCount > 0) setMsg(`Deleted ${removedCount}, failed ${failedCount}.`, "err");
+        else setMsg(`Deleted ${removedCount} file(s).`, "ok");
+        await syncStatus({ keepMsg: true });
+      } catch (e) {
+        if (LisaAdminUI.isAuthMessage(e.message)) {
+          await LisaAdminUI.showAuthError(e.message, "Delete files");
+          return;
+        }
+        setMsg(String(e.message || e), "err");
+      }
+    }
+
+    function exportCsvFiltered() {
+      const rows = sortArenaFiles(filteredArenaFiles());
+      const hdr = ["status", "name", "ext", "bytes", "mtime", "path"];
+      const escCsv = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+      const body = rows.map((r) => [
+        r.status, r.name, r.ext, r.bytes, r.mtime, r.path,
+      ].map(escCsv).join(","));
+      const csv = [hdr.join(","), ...body].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `rag_files_${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function loadFilesTable() {
+      const tbody = document.getElementById("arenaFilesTbody");
+      try {
+        const res = await fetch("/api/rag/files?limit=1200", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+        const rows = Array.isArray(d?.files) ? d.files : [];
+        arenaFilesCache = rows;
+        if (!arenaFilesCache.length) {
+          tbody.innerHTML = '<tr><td colspan="8" style="color: var(--muted);">No files found.</td></tr>';
+          document.getElementById("arenaSelectAllVisible").checked = false;
+          return;
+        }
+        renderFilesTableRows();
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#ff8b7a;">${esc(e.message || e)}</td></tr>`;
+      }
+    }
+
+    document.getElementById("arenaSyncBtn").addEventListener("click", syncStatus);
+    document.getElementById("arenaRebuildBtn").addEventListener("click", async () => {
+      if (!(await LisaAdminUI.ensureAdminToken("RAG rebuild"))) return;
+      setMsg("Rebuilding…");
+      LisaAdminUI.persistToken();
+      try {
+        const res = await fetch("/api/rag/ingest", {
+          method: "POST",
+          headers: LisaAdminUI.adminHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ reindex_all: true }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (await LisaAdminUI.checkAuthResponse(res, data, "RAG rebuild")) {
+          setMsg("");
+          return;
+        }
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const summary = formatRagIngestSummary(data);
+        setMsg(summary.msg, summary.cls);
+        await syncStatus();
+      } catch (e) {
+        if (LisaAdminUI.isAuthMessage(e.message)) {
+          setMsg("");
+          await LisaAdminUI.showAuthError(e.message, "RAG rebuild");
+          return;
+        }
+        setMsg(String(e.message || e), "err");
+      }
+    });
+
+    document.getElementById("arenaUploadBtn").addEventListener("click", async () => {
+      const files = document.getElementById("arenaFilesInput").files;
+      if (!files?.length) {
+        setMsg("Choose one or more files first.", "err");
+        return;
+      }
+      if (!(await LisaAdminUI.ensureAdminToken("RAG upload"))) return;
+      setMsg("Uploading…");
+      LisaAdminUI.persistToken();
+      const fd = new FormData();
+      fd.append("dest", document.getElementById("arenaDest").value);
+      for (const f of files) fd.append("file", f);
+      try {
+        const res = await fetch("/api/rag/upload", {
+          method: "POST",
+          headers: LisaAdminUI.adminHeaders(),
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (await LisaAdminUI.checkAuthResponse(res, data, "RAG upload")) return;
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const n = (data.saved || []).length;
+        setMsg(`Uploaded ${n} file(s).`, "ok");
+        document.getElementById("arenaFilesInput").value = "";
+        await syncStatus();
+      } catch (e) {
+        if (LisaAdminUI.isAuthMessage(e.message)) {
+          await LisaAdminUI.showAuthError(e.message, "RAG upload");
+          return;
+        }
+        setMsg(String(e.message || e), "err");
+      }
+    });
+    document.getElementById("arenaFileFilter").addEventListener("input", renderFilesTableRows);
+    document.getElementById("arenaStatusFilter").addEventListener("change", renderFilesTableRows);
+    document.getElementById("arenaSourceFilter").addEventListener("change", renderFilesTableRows);
+    document.getElementById("arenaSelectVisibleBtn").addEventListener("click", () => setVisibleSelection(true));
+    document.getElementById("arenaClearSelectionBtn").addEventListener("click", () => {
+      selectedPaths.clear();
+      updateSelectedKpi();
+      renderFilesTableRows();
+    });
+    document.getElementById("arenaDeleteSelectedBtn").addEventListener("click", () => {
+      deleteManyArenaFiles(Array.from(selectedPaths), "selected");
+    });
+    document.getElementById("arenaDeleteFilteredBtn").addEventListener("click", () => {
+      const filtered = visibleRowsSorted().map((r) => String(r.path || "")).filter(Boolean);
+      deleteManyArenaFiles(filtered, "filtered");
+    });
+    document.getElementById("arenaSelectAllVisible").addEventListener("change", (ev) => {
+      setVisibleSelection(!!ev.target.checked);
+    });
+    document.getElementById("arenaCsvBtn").addEventListener("click", exportCsvFiltered);
+    document.getElementById("arenaFilesTbody").addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".arena-delete-btn");
+      if (!btn) return;
+      deleteArenaFile(btn.dataset.path || "");
+    });
+    document.getElementById("arenaFilesTbody").addEventListener("change", (ev) => {
+      const cb = ev.target.closest(".arena-row-select");
+      if (!cb) return;
+      const p = String(cb.dataset.path || "");
+      if (!p) return;
+      if (cb.checked) selectedPaths.add(p);
+      else selectedPaths.delete(p);
+      const rows = visibleRowsSorted();
+      const allVisibleSelected = rows.length > 0 && rows.every((r) => selectedPaths.has(String(r.path || "")));
+      document.getElementById("arenaSelectAllVisible").checked = allVisibleSelected;
+      updateSelectedKpi();
+    });
+    document.querySelectorAll(".files-table th.sortable").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        if (!key) return;
+        if (sortKey === key) sortDir = sortDir === "asc" ? "desc" : "asc";
+        else {
+          sortKey = key;
+          sortDir = (key === "bytes" || key === "mtime") ? "desc" : "asc";
+        }
+        renderFilesTableRows();
+        savePrefs();
+      });
+    });
+    document.getElementById("arenaOpsModeBtn").addEventListener("click", () => {
+      document.body.classList.toggle("ops-compact");
+      const on = document.body.classList.contains("ops-compact");
+      const btn = document.getElementById("arenaOpsModeBtn");
+      btn.textContent = `Ops mode: ${on ? "on" : "off"}`;
+      btn.classList.toggle("on", on);
+      savePrefs();
+    });
+
+    loadPrefs();
+    LisaAdminUI.init({
+      tokenInputId: "arenaAdminTokenInputToolbar",
+      tokenWrapId: "arenaAdminTokenWrapFiles",
+    })
+      .then(() => {
+        const tok = LisaAdminUI.tokenValue();
+        if (tok) LisaAdminUI.persistToken();
+        return syncStatus();
+      })
+      .catch(() => syncStatus());
+  </script>
+</body>
+</html>

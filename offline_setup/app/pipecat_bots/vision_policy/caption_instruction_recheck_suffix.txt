@@ -1,0 +1,2 @@
+
+The user asked to look again or to verify fine details (for example colors). Treat this frame as authoritative for the current moment: be explicit about hues, small objects, and eye state; note if nothing changed compared with what a generic scene might suggest.

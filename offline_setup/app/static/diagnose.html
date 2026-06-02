@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Bot Diagnostic</title>
+  <style>
+    body { font-family: system-ui; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.25rem; }
+    .step { margin: 0.75rem 0; padding: 0.5rem; }
+    .ok { color: #0a0; }
+    .fail { color: #c00; }
+    .warn { color: #a60; }
+    .pending { color: #666; }
+    button { padding: 0.5rem 1rem; }
+    #log { font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; background: #f5f5f5; padding: 1rem; margin-top: 1rem; max-height: 300px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <div class="lisa-page-layout" style="max-width:900px;margin:2rem auto;padding:0 1rem;">
+    <aside class="lisa-side-panel" data-lisa-security-panel>
+      <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite" style="margin-top:0;">Checking security mode…</div>
+    </aside>
+    <main>
+  <h1>Voice Bot Diagnostic</h1>
+  <p><strong>If ICE fails:</strong> Use the <a href="/ws-voice"><strong>WebSocket client</strong></a> — it bypasses WebRTC/ICE entirely. Or in Chrome: <code>chrome://flags</code> → disable "Anonymize local IPs exposed by WebRTC" → restart.</p>
+  <p>Use <strong>http://127.0.0.1:7860</strong>. Or try <strong>http://169.254.2.1:7860</strong> (after setup_offline_network.sh) or your LAN IP. Keep WiFi on.</p>
+  <div id="steps"></div>
+  <button id="run">Run diagnostics</button>
+  <div id="log"></div>
+    </main>
+  </div>
+  <script>
+    if (window.location.search.includes('auto=1')) document.addEventListener('DOMContentLoaded', function() { document.getElementById('run').click(); });
+    (function() {
+      const base = window.location.origin;
+      const stepsEl = document.getElementById('steps');
+      const logEl = document.getElementById('log');
+      const btn = document.getElementById('run');
+
+      function log(m) { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+      function step(id, msg, cls) {
+        let el = document.getElementById('step-' + id);
+        if (!el) { el = document.createElement('div'); el.id = 'step-' + id; el.className = 'step'; stepsEl.appendChild(el); }
+        el.className = 'step ' + (cls || 'pending');
+        el.textContent = msg;
+      }
+
+      btn.onclick = async function() {
+        btn.disabled = true;
+        logEl.textContent = '';
+        stepsEl.innerHTML = '';
+        log('Starting...');
+
+        try {
+          step(1, '1. Testing /start...', 'pending');
+          const r = await fetch(base + '/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          const data = await r.json();
+          const sessionId = data.sessionId;
+          if (!sessionId) throw new Error('No sessionId');
+          step(1, '1. /start OK', 'ok');
+          log('Session: ' + sessionId);
+
+          step(2, '2. Requesting microphone...', 'pending');
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          step(2, '2. Microphone OK', 'ok');
+
+          step(3, '3. Creating WebRTC connection...', 'pending');
+          var iceConfig = (data.iceConfig || {}).iceServers || [];
+          var icePolicy = (data.iceConfig || {}).iceTransportPolicy || 'all';
+          const pc = new RTCPeerConnection({
+            iceServers: iceConfig,
+            iceTransportPolicy: icePolicy,
+            bundlePolicy: 'max-bundle'
+          });
+          pc.addTrack(stream.getAudioTracks()[0], stream);
+          pc.addTransceiver('audio', { direction: 'recvonly' });
+          pc.addTransceiver('video', { direction: 'recvonly' });
+          const dc = pc.createDataChannel('rtvi-ai', { ordered: true });
+          dc.onopen = function() { dc.send(JSON.stringify({ label: 'rtvi-ai', type: 'client-ready', id: 'diag-' + Date.now(), data: {} })); };
+          var iceCandidates = [];
+          pc.onicecandidate = function(ev) { if (ev.candidate) iceCandidates.push(ev.candidate); };
+          step(3, '3. PeerConnection created', 'ok');
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await new Promise(function(r) {
+            if (pc.iceGatheringState === 'complete') return r();
+            pc.onicegatheringstatechange = function() { if (pc.iceGatheringState === 'complete') r(); };
+            setTimeout(r, 8000);
+          });
+          log('ICE gathering: ' + pc.iceGatheringState);
+
+          step(4, '4. Sending offer...', 'pending');
+          const offerRes = await fetch(base + '/sessions/' + sessionId + '/api/offer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
+          });
+          const answerData = await offerRes.json();
+          const pcId = answerData.pc_id;
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: answerData.type, sdp: answerData.sdp }));
+
+          const cands = iceCandidates.slice();
+          if (cands.length) {
+            fetch(base + '/sessions/' + sessionId + '/api/offer', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pc_id: pcId, candidates: cands.map(function(c) { return { candidate: c.candidate, sdp_mid: c.sdpMid, sdp_mline_index: c.sdpMLineIndex }; }) })
+            }).catch(function() {});
+          }
+          pc.onicecandidate = function(ev) {
+            if (ev.candidate) fetch(base + '/sessions/' + sessionId + '/api/offer', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pc_id: pcId, candidates: [{ candidate: ev.candidate.candidate, sdp_mid: ev.candidate.sdpMid, sdp_mline_index: ev.candidate.sdpMLineIndex }] })
+            }).catch(function() {});
+          };
+
+          step(4, '4. Offer sent, answer received', 'ok');
+          log('Answer received, pc_id: ' + pcId);
+
+          step(5, '5. Waiting for ICE connection (max 15s)...', 'pending');
+          await new Promise(function(resolve) {
+            function check() {
+              if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                step(5, '5. ICE connected!', 'ok');
+                resolve();
+              } else if (pc.iceConnectionState === 'failed') {
+                step(5, '5. ICE failed', 'fail');
+                resolve();
+              }
+            }
+            pc.oniceconnectionstatechange = check;
+            check();
+            setTimeout(function() {
+              if (pc.iceConnectionState !== 'connected' && pc.iceConnectionState !== 'completed') {
+                step(5, '5. ICE timeout (state: ' + pc.iceConnectionState + ')', 'fail');
+                log('ICE state: ' + pc.iceConnectionState + ', connection: ' + pc.connectionState);
+                resolve();
+              }
+            }, 15000);
+          });
+
+          log('Done. ICE: ' + pc.iceConnectionState + ', connection: ' + pc.connectionState);
+          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            step(6, '6. SUCCESS - Try /offline-voice for voice chat', 'ok');
+          } else {
+            step(6, '6. Connection failed (ICE timeout)', 'fail');
+            step(7, '7. FIX: chrome://flags → disable "Anonymize local IPs exposed by WebRTC" → restart Chrome', 'warn');
+            step(8, '8. Or: sudo apt install coturn && sudo ./setup_turn_server.sh && PIPECAT_USE_TURN=1 ./offline_nemotron_start.sh', 'warn');
+            try {
+              const ipRes = await fetch(base + '/api/host-ip');
+              const ipData = await ipRes.json();
+              if (ipData.urls && ipData.urls.length) {
+                const tryUrl = ipData.dummy_url || ipData.lan_url || ipData.urls[0];
+                step(9, '9. Or try: ' + tryUrl + '/offline-voice', 'warn');
+              }
+            } catch (e) {}
+          }
+        } catch (e) {
+          log('Error: ' + e.message);
+          step('err', 'Error: ' + e.message, 'fail');
+        }
+        btn.disabled = false;
+      };
+    })();
+  </script>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

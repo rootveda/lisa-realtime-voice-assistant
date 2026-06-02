@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Session Manager</title>
+  <style>
+    body { margin: 0; padding: 16px; font-family: Inter, Segoe UI, Roboto, Arial, sans-serif; background: #070b14; color: #dff6ff; }
+    h1 { margin: 0 0 12px; font-size: 16px; color: #45e6ff; letter-spacing: .06em; text-transform: uppercase; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 10px; }
+    button, input { background:#0d162b; color:#dff6ff; border:1px solid #24416b; border-radius:8px; padding:8px 10px; }
+    button { cursor:pointer; }
+    table { width:100%; border-collapse: collapse; background:#0b1426; border:1px solid #243357; border-radius:10px; overflow:hidden; }
+    th, td { padding:8px; border-bottom:1px solid #243357; font-size:12px; text-align:left; }
+    th { color:#45e6ff; background:#101b32; }
+    .muted { color:#8cb8c7; }
+    .overlay { position: fixed; inset: 0; display: none; place-items: center; background: rgba(2, 8, 20, 0.72); z-index: 40; }
+    .overlay.show { display: grid; }
+    .overlay-card { width: min(520px, calc(100vw - 28px)); border: 1px solid #24416b; border-radius: 12px; background: #0b1426; padding: 12px; }
+    .overlay-title { font-weight: 600; color: #45e6ff; margin-bottom: 6px; }
+    .overlay-msg { color: #dff6ff; margin-bottom: 10px; line-height: 1.4; }
+    .overlay-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    #confirmInput { width: 100%; margin: 6px 0 10px; }
+  </style>
+</head>
+<body>
+  <div class="lisa-page-layout" style="padding:16px;">
+    <aside class="lisa-side-panel" data-lisa-security-panel>
+      <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite" style="margin-top:0;">Checking security mode…</div>
+      <p class="muted" style="font-size:12px;margin:10px 0 0;line-height:1.45;">Sessions are stored in this browser. Open Assistant Console to chat with a selected session.</p>
+    </aside>
+    <main>
+  <h1>Session Memory Manager</h1>
+  <div class="row">
+    <button id="newBtn" type="button">New session</button>
+    <button id="clearAllHistoryBtn" type="button">Clear all histories</button>
+    <button id="openBtn" type="button">Open selected in Assistant</button>
+    <span class="muted">Select a row, rename/delete inline.</span>
+  </div>
+  <table>
+    <thead>
+      <tr><th></th><th>Name</th><th>Updated</th><th>Messages</th><th>RAG</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="confirmOverlay" class="overlay" aria-live="polite" aria-modal="true" role="dialog">
+    <div class="overlay-card">
+      <div id="confirmTitle" class="overlay-title">Confirm</div>
+      <div id="confirmMsg" class="overlay-msg"></div>
+      <input id="confirmInput" type="text" style="display:none;" />
+      <div class="overlay-actions">
+        <button id="confirmCancelBtn" type="button">Cancel</button>
+        <button id="confirmOkBtn" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+    </main>
+  </div>
+
+  <script src="/session-memory/store.js"></script>
+  <script>
+    const store = window.AssistantSessionStore;
+    const tbody = document.getElementById("tbody");
+    const confirmOverlayEl = document.getElementById("confirmOverlay");
+    const confirmTitleEl = document.getElementById("confirmTitle");
+    const confirmMsgEl = document.getElementById("confirmMsg");
+    const confirmInputEl = document.getElementById("confirmInput");
+    const confirmCancelBtnEl = document.getElementById("confirmCancelBtn");
+    const confirmOkBtnEl = document.getElementById("confirmOkBtn");
+    const SESSION_NAME_MAX = 64;
+    let selectedId = "";
+
+    function ts(v){
+      const n = Number(v) || 0;
+      if (!n) return "—";
+      const ms = n < 1e12 ? n * 1000 : n;
+      return new Date(ms).toLocaleString();
+    }
+    function esc(s){ const d=document.createElement("div"); d.textContent=String(s??""); return d.innerHTML; }
+    function openOverlayDialog(opts = {}) {
+      const title = opts.title || "Confirm";
+      const message = opts.message || "";
+      const okText = opts.okText || "OK";
+      const cancelText = opts.cancelText || "Cancel";
+      const showInput = !!opts.showInput;
+      const defaultValue = typeof opts.defaultValue === "string" ? opts.defaultValue : "";
+      return new Promise((resolve) => {
+        confirmTitleEl.textContent = title;
+        confirmMsgEl.textContent = message;
+        confirmOkBtnEl.textContent = okText;
+        confirmCancelBtnEl.textContent = cancelText;
+        if (showInput) {
+          confirmInputEl.style.display = "block";
+          confirmInputEl.value = defaultValue;
+          confirmInputEl.focus();
+          confirmInputEl.select();
+        } else {
+          confirmInputEl.style.display = "none";
+          confirmInputEl.value = "";
+        }
+        confirmOverlayEl.classList.add("show");
+        const done = (ok) => {
+          confirmOverlayEl.classList.remove("show");
+          confirmOkBtnEl.removeEventListener("click", onOk);
+          confirmCancelBtnEl.removeEventListener("click", onCancel);
+          confirmOverlayEl.removeEventListener("click", onBackdrop);
+          confirmInputEl.removeEventListener("keydown", onInputKey);
+          resolve({ ok: !!ok, value: showInput ? confirmInputEl.value : "" });
+        };
+        const onOk = () => done(true);
+        const onCancel = () => done(false);
+        const onBackdrop = (e) => {
+          if (e.target === confirmOverlayEl) done(false);
+        };
+        const onInputKey = (e) => {
+          if (e.key === "Enter") done(true);
+          if (e.key === "Escape") done(false);
+        };
+        confirmOkBtnEl.addEventListener("click", onOk);
+        confirmCancelBtnEl.addEventListener("click", onCancel);
+        confirmOverlayEl.addEventListener("click", onBackdrop);
+        confirmInputEl.addEventListener("keydown", onInputKey);
+      });
+    }
+    async function confirmInPage(message, title = "Confirm", okText = "OK") {
+      const out = await openOverlayDialog({ message, title, okText, cancelText: "Cancel", showInput: false });
+      return out.ok;
+    }
+    async function promptInPage(message, title = "Prompt", defaultValue = "", okText = "Save") {
+      const out = await openOverlayDialog({
+        message,
+        title,
+        okText,
+        cancelText: "Cancel",
+        showInput: true,
+        defaultValue,
+      });
+      if (!out.ok) return null;
+      return String(out.value || "").trim();
+    }
+    function sanitizeSessionName(raw) {
+      const s = String(raw || "")
+        .replace(/[\r\n\t]+/g, " ")
+        .replace(/[<>\\]/g, "")
+        .replace(/\s+/g, " ");
+      return s.trim().slice(0, SESSION_NAME_MAX);
+    }
+    function sessionNameTaken(name, excludeId = "") {
+      const n = String(name || "").trim().toLowerCase();
+      if (!n) return false;
+      return store.listSummaries().some((x) => x.id !== excludeId && String(x.name || "").trim().toLowerCase() === n);
+    }
+    async function requestValidSessionName({ title, message, defaultValue, excludeId = "", okText = "Save" }) {
+      let draft = defaultValue || "";
+      while (true) {
+        const incoming = await promptInPage(message, title, draft, okText);
+        if (incoming == null) return null;
+        const name = sanitizeSessionName(incoming);
+        if (!name) {
+          await confirmInPage("Session name cannot be empty.", "Invalid name", "OK");
+          draft = defaultValue || "";
+          continue;
+        }
+        if (sessionNameTaken(name, excludeId)) {
+          await confirmInPage("A session with this name already exists. Choose a unique name.", "Duplicate name", "OK");
+          draft = name;
+          continue;
+        }
+        return name;
+      }
+    }
+
+    function render() {
+      const rows = store.listSummaries();
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="muted">No sessions.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
+        <tr data-id="${esc(r.id)}">
+          <td><input type="radio" name="sid" ${selectedId===r.id?'checked':''}></td>
+          <td><input data-name="${esc(r.id)}" value="${esc(r.name)}"></td>
+          <td>${esc(ts(r.updatedAt))}</td>
+          <td>${esc(r.messageCount)}</td>
+          <td>${r.ragEnabled ? "on" : "off"}</td>
+          <td>
+            <button data-rename="${esc(r.id)}" type="button">Save name</button>
+            <button data-clear="${esc(r.id)}" type="button">Clear history</button>
+            <button data-delete="${esc(r.id)}" type="button">Delete</button>
+          </td>
+        </tr>`).join("");
+
+      tbody.querySelectorAll("tr").forEach(tr => {
+        tr.addEventListener("click", (e) => {
+          if (e.target.closest("input,button,label")) return;
+          selectedId = tr.dataset.id || "";
+          render();
+        });
+      });
+      tbody.querySelectorAll('input[data-name]').forEach(inp => {
+        inp.addEventListener("click", (e) => e.stopPropagation());
+        inp.addEventListener("mousedown", (e) => e.stopPropagation());
+        inp.addEventListener("focus", (e) => e.stopPropagation());
+      });
+      tbody.querySelectorAll("button[data-rename]").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.rename;
+          const inp = tbody.querySelector(`input[data-name="${CSS.escape(id)}"]`);
+          const current = inp ? inp.value : "";
+          const next = await requestValidSessionName({
+            title: "Rename session",
+            message: `Enter a new session name (max ${SESSION_NAME_MAX} characters).`,
+            defaultValue: current,
+            excludeId: id,
+            okText: "Save",
+          });
+          if (next == null) return;
+          store.renameSession(id, next);
+          render();
+        });
+      });
+      tbody.querySelectorAll("button[data-delete]").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.delete;
+          const ok = await confirmInPage("Delete this session?", "Delete session", "Delete");
+          if (!ok) return;
+          store.deleteSession(id);
+          if (selectedId === id) selectedId = "";
+          render();
+        });
+      });
+      tbody.querySelectorAll("button[data-clear]").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.clear;
+          const ok = await confirmInPage(
+            "Clear chat history for this session? Name/settings will be kept.",
+            "Clear history",
+            "Clear",
+          );
+          if (!ok) return;
+          if (typeof store.clearSessionMessages === "function") {
+            store.clearSessionMessages(id);
+          }
+          render();
+        });
+      });
+    }
+
+    document.getElementById("newBtn").addEventListener("click", async () => {
+      const proposed = `Session ${store.listSummaries().length + 1}`;
+      const name = await requestValidSessionName({
+        title: "New session",
+        message: `Enter a name for the new session (max ${SESSION_NAME_MAX} characters).`,
+        defaultValue: proposed,
+        okText: "Create",
+      });
+      if (name == null) return;
+      const s = store.createSession(name);
+      selectedId = s.id;
+      render();
+    });
+    document.getElementById("clearAllHistoryBtn").addEventListener("click", async () => {
+      const ok = await confirmInPage(
+        "Clear chat history for all sessions? Session names/settings will be kept.",
+        "Clear all histories",
+        "Clear",
+      );
+      if (!ok) return;
+      const out = typeof store.clearAllMessages === "function" ? store.clearAllMessages() : { changed: 0, total: 0 };
+      await confirmInPage(
+        `Cleared history for ${out.changed || 0} session(s).`,
+        "Done",
+        "OK",
+      );
+      render();
+    });
+    document.getElementById("openBtn").addEventListener("click", () => {
+      const id = selectedId || store.listSummaries()[0]?.id;
+      if (!id) return;
+      store.setActiveId(id);
+      location.href = "/assistant-console";
+    });
+    (async function bootSessionManager() {
+      if (store?.syncFromServer) {
+        try {
+          await store.syncFromServer();
+        } catch (_) {}
+      }
+      const active = store.ensureActiveSession();
+      selectedId = active?.id || "";
+      render();
+    })();
+  </script>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

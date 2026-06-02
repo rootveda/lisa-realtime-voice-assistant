@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loading Pipecat Client...</title>
+  <style>
+    body { font-family: system-ui; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .box { text-align: center; padding: 2rem; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #eee; border-top-color: #333; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="spinner"></div>
+    <p>Registering offline bundle...</p>
+    <p id="status">Please wait...</p>
+  </div>
+  <script>
+    (function() {
+      const status = document.getElementById('status');
+      function go() {
+        window.location.replace('/client/');
+      }
+      if (!('serviceWorker' in navigator)) {
+        status.textContent = 'No Service Worker support, redirecting...';
+        go();
+        return;
+      }
+      navigator.serviceWorker.register('/sw.js')
+        .then(function(reg) {
+          status.textContent = 'Service Worker registered. Activating...';
+          if (reg.active) {
+            go();
+            return;
+          }
+          return navigator.serviceWorker.ready;
+        })
+        .then(function() {
+          status.textContent = 'Ready. Redirecting...';
+          go();
+        })
+        .catch(function(err) {
+          status.textContent = 'SW failed: ' + err.message + '. Redirecting anyway...';
+          setTimeout(go, 1500);
+        });
+    })();
+  </script>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

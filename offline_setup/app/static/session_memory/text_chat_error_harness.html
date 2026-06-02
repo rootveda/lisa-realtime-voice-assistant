@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Text chat error detail harness</title>
+</head>
+<body>
+  <div class="lisa-page-layout" style="max-width:960px;margin:16px;padding:0 16px;">
+    <aside class="lisa-side-panel" data-lisa-security-panel>
+      <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite" style="margin-top:0;">Checking security mode…</div>
+    </aside>
+    <main>
+  <p>Playwright mocks /api/* on this origin and verifies the same helper as the Assistant Console.</p>
+  <button type="button" id="btnCompletions">Run completions error test</button>
+  <button type="button" id="btnAttachments">Run attachments error test</button>
+  <pre id="result"></pre>
+    </main>
+  </div>
+  <script src="./http_error_detail.js"></script>
+  <script>
+    const resultEl = document.getElementById("result");
+
+    document.getElementById("btnCompletions").onclick = async () => {
+      try {
+        const res = await fetch("/api/text-chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        if (!res.ok) {
+          resultEl.textContent = await fetchHttpErrorDetail(res);
+        } else {
+          resultEl.textContent = "unexpected ok";
+        }
+      } catch (e) {
+        resultEl.textContent = String(e && e.message ? e.message : e);
+      }
+    };
+
+    document.getElementById("btnAttachments").onclick = async () => {
+      try {
+        const fd = new FormData();
+        fd.append("session_id", "test-session");
+        fd.append("file", new Blob(["x"], { type: "text/plain" }), "t.txt");
+        const res = await fetch("/api/chat/attachments", { method: "POST", body: fd });
+        if (!res.ok) {
+          resultEl.textContent = await fetchHttpErrorDetail(res);
+        } else {
+          resultEl.textContent = "unexpected ok";
+        }
+      } catch (e) {
+        resultEl.textContent = String(e && e.message ? e.message : e);
+      }
+    };
+  </script>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

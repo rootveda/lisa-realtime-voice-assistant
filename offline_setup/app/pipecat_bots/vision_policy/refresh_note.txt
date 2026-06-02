@@ -1,0 +1,4 @@
+
+
+[Vision policy — user message]
+The user asked for an updated look or a fine-detail check (for example color). The [Camera context] observation in this message was captured for this turn—prefer it over any earlier camera descriptions elsewhere in the transcript.

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Face session phase self-test</title>
+</head>
+<body>
+  <div class="lisa-page-layout" style="max-width:960px;margin:16px;padding:0 16px;">
+    <aside class="lisa-side-panel" data-lisa-security-panel>
+      <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite" style="margin-top:0;">Checking security mode…</div>
+    </aside>
+    <main>
+  <p id="status">Running…</p>
+  <script src="./face_session_phase.js"></script>
+  <script>
+    function fail(msg) {
+      document.getElementById("status").textContent = "FAIL: " + msg;
+      window.__FACE_PHASE_TEST_OK = false;
+      window.__FACE_PHASE_TEST_ERROR = msg;
+    }
+    function pass() {
+      document.getElementById("status").textContent = "OK";
+      window.__FACE_PHASE_TEST_OK = true;
+    }
+    try {
+      const alice = "person_alice_unit";
+      const unk = "unknown_unitbeef001";
+      const bob = "person_bob_unit";
+
+      /** Grace-merge: merged lists two IDs; strict frame is single enrolled (regression: must not be multi). */
+      const graceMerge = {
+        observed_person_ids: [alice, unk],
+        observed_with_names: [
+          { person_id: alice, display_name: "Alice", enrolled: true },
+          { person_id: unk, display_name: "Unknown", enrolled: false },
+        ],
+        observed_now_person_ids: [alice],
+        observed_now_with_names: [
+          { person_id: alice, display_name: "Alice", enrolled: true },
+        ],
+        focus_mode: "person",
+        focus_person_id: alice,
+        voice_face_active: true,
+      };
+      const r1 = computeFaceSessionPhase(graceMerge);
+      if (r1.phase === "multi" || r1.multi) {
+        fail("grace-merge should not be multiface when strict frame has one enrolled face");
+        throw new Error("abort");
+      }
+      if (r1.phase !== "single") {
+        fail("grace-merge expected phase single, got " + r1.phase);
+        throw new Error("abort");
+      }
+
+      /** Two enrolled in strict frame → multi */
+      const twoEnrolled = {
+        observed_person_ids: [alice, bob],
+        observed_with_names: [
+          { person_id: alice, display_name: "Alice", enrolled: true },
+          { person_id: bob, display_name: "Bob", enrolled: true },
+        ],
+        observed_now_person_ids: [alice, bob],
+        observed_now_with_names: [
+          { person_id: alice, display_name: "Alice", enrolled: true },
+          { person_id: bob, display_name: "Bob", enrolled: true },
+        ],
+        focus_mode: "auto",
+        focus_person_id: null,
+        voice_face_active: true,
+      };
+      const r2 = computeFaceSessionPhase(twoEnrolled);
+      if (r2.phase !== "multi" || !r2.multi) {
+        fail("two enrolled in strict frame should be multi");
+        throw new Error("abort");
+      }
+
+      /** Legacy payload without observed_now_* : two enrolled in merged only */
+      const legacyTwo = {
+        observed_person_ids: [alice, bob],
+        observed_with_names: [
+          { person_id: alice, display_name: "Alice", enrolled: true },
+          { person_id: bob, display_name: "Bob", enrolled: true },
+        ],
+        focus_mode: "auto",
+        focus_person_id: null,
+        voice_face_active: true,
+      };
+      const r3 = computeFaceSessionPhase(legacyTwo);
+      if (r3.phase !== "multi") {
+        fail("legacy two enrolled merged should be multi");
+        throw new Error("abort");
+      }
+
+      /** Strict two faces but only one enrolled → not multiAllEnrolledStrict */
+      const strictMixed = {
+        observed_person_ids: [alice, unk],
+        observed_with_names: [
+          { person_id: alice, display_name: "Alice", enrolled: true },
+          { person_id: unk, display_name: "Unknown", enrolled: false },
+        ],
+        observed_now_person_ids: [alice, unk],
+        observed_now_with_names: [
+          { person_id: alice, display_name: "Alice", enrolled: true },
+          { person_id: unk, display_name: "Unknown", enrolled: false },
+        ],
+        focus_mode: "auto",
+        focus_person_id: null,
+        voice_face_active: true,
+      };
+      const r4 = computeFaceSessionPhase(strictMixed);
+      if (r4.phase === "multi") {
+        fail("strict frame enrolled+unknown should not choose multiface phase");
+        throw new Error("abort");
+      }
+
+      pass();
+    } catch (e) {
+      if (window.__FACE_PHASE_TEST_OK !== false) fail(String(e && e.message ? e.message : e));
+    }
+  </script>
+    </main>
+  </div>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

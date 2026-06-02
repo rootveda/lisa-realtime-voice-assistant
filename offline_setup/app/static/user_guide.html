@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lisa — Real-time Voice Assistant (Operator Guide)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      background: #070b14;
+      color: #dff6ff;
+      line-height: 1.5;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      color: #45e6ff;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .subtitle { color: #8cb8c7; font-size: 13px; margin: 0 0 16px; max-width: 72ch; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    nav.toc {
+      position: sticky;
+      top: 16px;
+      border: 1px solid #243357;
+      border-radius: 10px;
+      background: #0b1426;
+      padding: 12px;
+      font-size: 12px;
+    }
+    nav.toc strong {
+      display: block;
+      color: #45e6ff;
+      margin-bottom: 8px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    nav.toc a {
+      display: block;
+      color: #8cb8c7;
+      text-decoration: none;
+      padding: 4px 0;
+    }
+    nav.toc a:hover { color: #45e6ff; }
+    nav.toc .sub { padding-left: 12px; font-size: 11px; }
+    main { min-width: 0; }
+    section.panel {
+      border: 1px solid #243357;
+      border-radius: 10px;
+      background: #0b1426;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    section.panel > h2 {
+      margin: 0;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #45e6ff;
+      border-bottom: 1px solid #243357;
+      background: #101b32;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .body { padding: 12px 14px; }
+    h3 {
+      margin: 16px 0 8px;
+      font-size: 12px;
+      color: #45e6ff;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    h3:first-child { margin-top: 0; }
+    p, li { font-size: 13px; color: #dff6ff; }
+    .muted { color: #8cb8c7; font-size: 12px; }
+    ul, ol { margin: 8px 0; padding-left: 20px; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+    }
+    code {
+      background: #0d162b;
+      border: 1px solid #24416b;
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+    pre {
+      background: #0d162b;
+      border: 1px solid #243357;
+      border-radius: 8px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      color: #8cb8c7;
+      margin: 8px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 10px 0;
+    }
+    th, td {
+      border: 1px solid #243357;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #101b32; color: #45e6ff; font-weight: 600; }
+    td code { word-break: break-all; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    a.btn, button.btn {
+      display: inline-block;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: #45e6ff;
+      background: #0f1c34;
+      border: 1px solid #355a8a;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    a.btn:hover { border-color: #45e6ff; }
+    .callout {
+      border: 1px solid #355a8a;
+      background: #0f1c34;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #8cb8c7;
+      margin: 10px 0;
+    }
+    .callout.warn { border-color: #8b5432; background: #241810; color: #ffc9a0; }
+    .callout.ok { border-color: #2a6b4a; background: #0f1f18; color: #a8e6c3; }
+    .security-mode-banner {
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.45;
+      border: 1px solid #24416b;
+    }
+  </style>
+</head>
+<body>
+  <h1>Lisa — Real-time Voice Assistant (Operator Guide)</h1>
+  <p class="subtitle">
+    End-to-end reference for the offline real-time voice assistant stack: starting services, using each console and manager page,
+    models and GPU roles, persistence, and admin security.
+    Run all shell commands from <code>lisa/nvidia_voice</code> (the directory that contains <code>offline_setup/</code>).
+  </p>
+
+  <div class="row">
+    <a class="btn" href="/assistant-console">Assistant Console</a>
+    <a class="btn" href="/session-manager">Session Manager</a>
+    <a class="btn" href="/instructions-manager">Instructions Manager</a>
+    <a class="btn" href="/face-manager">Face Manager</a>
+    <a class="btn" href="/rag-arena">RAG Arena</a>
+  </div>
+
+  <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite">Checking security mode…</div>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Table of contents">
+      <strong>Contents</strong>
+      <a href="#quick-start">Quick start</a>
+      <a href="#stack-control">Stack control</a>
+      <a class="sub" href="#stack-commands">Commands</a>
+      <a class="sub" href="#stack-flags">Flags &amp; env</a>
+      <a class="sub" href="#stack-status">Status output</a>
+      <a href="#urls">URLs &amp; ports</a>
+      <a href="#components">Application components</a>
+      <a href="#models">Models &amp; GPU services</a>
+      <a href="#security">Security model</a>
+      <a class="sub" href="#security-layers">Layers we enforce</a>
+      <a class="sub" href="#security-limits">Limits &amp; honest scope</a>
+      <a href="#admin">Admin role &amp; token</a>
+      <a class="sub" href="#admin-features">Protected features</a>
+      <a class="sub" href="#admin-setup">Setup &amp; usage</a>
+      <a href="#persistence">Data persistence</a>
+      <a class="sub" href="#persistence-matrix">How / where / why</a>
+      <a href="#logs">Logs &amp; troubleshooting</a>
+    </nav>
+
+    <main>
+
+      <section class="panel" id="quick-start">
+        <h2>Quick start</h2>
+        <div class="body">
+          <h3>Home dev (this PC only, no token)</h3>
+          <pre>cd lisa/nvidia_voice
+./offline_setup/lisa_stack.sh start</pre>
+          <p>Open <a href="/assistant-console"><code>https://127.0.0.1:7860/assistant-console</code></a>. Admin mutations work from localhost without a Bearer token.</p>
+
+          <h3>LAN + admin token (phones, other PCs)</h3>
+          <pre>cp offline_setup/lisa_admin_token.env.example offline_setup/lisa_admin_token.env
+# Edit LISA_ADMIN_TOKEN — generate: openssl rand -hex 24
+./offline_setup/lisa_stack.sh start --admin</pre>
+          <p>Paste the token in the UI: <strong>LLM Routing → Admin token</strong> (Assistant Console), or the admin field on Face Manager, Instructions Manager, and RAG Arena.</p>
+
+          <h3>LAN via nginx (port 8088)</h3>
+          <pre>./offline_setup/lisa_stack.sh start --admin --network-proxy</pre>
+          <p class="muted">Requires <code>Network/nginx/lisa-bot.conf</code> in the checkout and sudo for nginx install. Console: <code>https://&lt;LAN-IP&gt;:8088/assistant-console</code></p>
+
+          <div class="callout ok">
+            Verify security mode anytime:
+            <code>curl -sk https://127.0.0.1:7860/api/admin/capabilities</code>
+            → <code>admin_token_required: false</code> (home dev) or <code>true</code> (admin mode).
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="stack-control">
+        <h2>Stack control — <code>lisa_stack.sh</code></h2>
+        <div class="body">
+          <p><strong>Script path:</strong> <code>offline_setup/lisa_stack.sh</code></p>
+          <p>Single entrypoint for the full offline voice stack: Nemotron ASR → XTTS TTS → dialogue LLM (local llama or Ollama) → bot (<code>bot_vllm.py</code>) → optional HTTPS proxy on port <strong>7860</strong>.</p>
+          <p class="muted"><code>start</code> and <code>restart</code> always run a <strong>clean stop</strong> first so duplicate bots, proxies, or containers do not linger. Ollama as a system service is <em>not</em> stopped; on start, loaded Ollama runners are unloaded to free GPU VRAM for XTTS and local llama (<code>STACK_UNLOAD_OLLAMA_AT_START=1</code> default).</p>
+
+          <h3 id="stack-commands">Commands</h3>
+          <table>
+            <thead>
+              <tr><th>Command</th><th>What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>start</code></td>
+                <td>Stop any running stack pieces, then run <code>start_current_stack.sh</code>. Default: <strong>home dev</strong> — loopback bind, no admin token required locally.</td>
+              </tr>
+              <tr>
+                <td><code>start --admin</code></td>
+                <td>Sources <code>offline_setup/lisa_admin_token.env</code>: public/LAN bind + <code>LISA_ADMIN_TOKEN</code> required for admin API mutations.</td>
+              </tr>
+              <tr>
+                <td><code>start --network-proxy</code></td>
+                <td>After stack is up, installs/reloads nginx LAN site (port <strong>8088</strong>). Does not stop nginx on <code>stop</code>.</td>
+              </tr>
+              <tr>
+                <td><code>start --admin --network-proxy</code></td>
+                <td>Common phone/LAN setup: token-protected admin APIs + nginx entry on 8088.</td>
+              </tr>
+              <tr>
+                <td><code>stop</code></td>
+                <td>Stops bot, TLS proxy, Docker <code>xtts-tts</code>, <code>lisa-llama-primary</code>, Nemotron ASR container.</td>
+              </tr>
+              <tr>
+                <td><code>restart</code></td>
+                <td>Same as <code>stop</code> then <code>start</code>; respects <code>--admin</code> and <code>--network-proxy</code> flags.</td>
+              </tr>
+              <tr>
+                <td><code>status</code></td>
+                <td>Prints stack mode file, processes, Docker rows, HTTP health probes, vision/Ollama checks, GPU summary, and <strong>models in use</strong> table.</td>
+              </tr>
+              <tr>
+                <td><code>help</code></td>
+                <td>Usage summary (same as running with no args).</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3 id="stack-flags">Flags &amp; environment equivalents</h3>
+          <table>
+            <thead>
+              <tr><th>Flag / env</th><th>Effect</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>--admin</code><br><code>LISA_STACK_ADMIN=1</code></td>
+                <td>Load <code>lisa_admin_token.env</code>; set <code>LISA_BIND_PUBLIC=1</code>, <code>LISA_BIND_LOOPBACK_ONLY=0</code>, require Bearer token for admin mutations.</td>
+              </tr>
+              <tr>
+                <td><code>--network-proxy</code><br><code>LISA_NETWORK_PROXY=1</code></td>
+                <td>Run nginx install helper after successful start.</td>
+              </tr>
+              <tr>
+                <td><code>USE_LOCAL_LLAMA_PRIMARY=1</code></td>
+                <td>Start Docker <code>lisa-llama-primary</code> on <code>:8000</code> (default when GGUF file exists). Set <code>0</code> to use Ollama for dialogue.</td>
+              </tr>
+              <tr>
+                <td><code>LOCAL_LLAMA_CTX_SIZE</code></td>
+                <td>Context window for local llama (default <strong>49152</strong>). Larger = more VRAM. Lower if OOM.</td>
+              </tr>
+              <tr>
+                <td><code>LOCAL_LLAMA_N_GPU_LAYERS</code></td>
+                <td>GPU layers for local llama (default <strong>28</strong>). Reduce to leave VRAM for XTTS/vision.</td>
+              </tr>
+              <tr>
+                <td><code>NVIDIA_LLM_MODEL</code></td>
+                <td>Ollama tag when local llama is not primary (default <code>gemma4:e2b-it-q4_K_M</code>).</td>
+              </tr>
+              <tr>
+                <td><code>VISION_OLLAMA_MODEL</code></td>
+                <td>Ollama vision model for camera captions (default <code>gemma4:e2b-it-q4_K_M</code>).</td>
+              </tr>
+              <tr>
+                <td><code>STACK_UNLOAD_OLLAMA_AT_START=0</code></td>
+                <td>Skip <code>ollama stop</code> before XTTS (keep models hot; may cause VRAM pressure).</td>
+              </tr>
+              <tr>
+                <td><code>ENABLE_HTTPS=0</code></td>
+                <td>Bot only on HTTP (no TLS proxy). Use <code>http://127.0.0.1:7861/...</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="muted">Set env vars in the shell <em>before</em> <code>lisa_stack.sh start</code>, or in <code>lisa_admin_token.env</code> for admin mode.</p>
+
+          <h3 id="stack-status">What <code>status</code> shows</h3>
+          <ul>
+            <li><strong>Stack mode file</strong> — <code>/tmp/stack_mode.txt</code> (provider, URL, model from last start).</li>
+            <li><strong>Processes</strong> — <code>bot_vllm.py</code>, <code>tls_tcp_proxy.py</code>.</li>
+            <li><strong>Docker</strong> — <code>xtts-tts</code>, <code>lisa-llama-primary</code>, <code>nemotron</code>.</li>
+            <li><strong>HTTP checks</strong> — ASR :8080, XTTS :80, bot :7861, HTTPS :7860, optional nginx :8088.</li>
+            <li><strong>Vision</strong> — Ollama tags, vision model presence, <code>POST /api/vision/preview</code> smoke test.</li>
+            <li><strong>GPU &amp; models table</strong> — see <a href="#models">Models section</a> below.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel" id="urls">
+        <h2>URLs &amp; ports</h2>
+        <div class="body">
+          <table>
+            <thead>
+              <tr><th>Port</th><th>Service</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>7860</strong></td><td>HTTPS (TLS proxy)</td><td>Primary browser entry. Use <code>https://</code>, not <code>http://</code>.</td></tr>
+              <tr><td><strong>7861</strong></td><td>Bot HTTP</td><td>Direct bot API; used internally by proxy.</td></tr>
+              <tr><td><strong>8088</strong></td><td>nginx LAN proxy</td><td>Optional; separate browser origin from :7860.</td></tr>
+              <tr><td><strong>8000</strong></td><td>Local llama-server</td><td>OpenAI-compatible <code>/v1</code> when primary.</td></tr>
+              <tr><td><strong>11434</strong></td><td>Ollama</td><td>Dialogue (fallback) + vision captions.</td></tr>
+              <tr><td><strong>8080</strong></td><td>Nemotron ASR</td><td>Speech-to-text WebSocket.</td></tr>
+              <tr><td><strong>80</strong></td><td>XTTS TTS</td><td>Text-to-speech (Coqui XTTS v2).</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Main pages</h3>
+          <table>
+            <thead>
+              <tr><th>Page</th><th>Path</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Assistant Console</td><td><a href="/assistant-console">/assistant-console</a></td><td>Primary UI: text chat, voice, live camera, RAG, LLM routing, tools.</td></tr>
+              <tr><td>Session Manager</td><td><a href="/session-manager">/session-manager</a></td><td>Rename, delete, clear histories; open session in console.</td></tr>
+              <tr><td>Instructions Manager</td><td><a href="/instructions-manager">/instructions-manager</a></td><td>Edit system-prompt presets (markdown).</td></tr>
+              <tr><td>Face Manager</td><td><a href="/face-manager">/face-manager</a></td><td>Face recognition toggle, enroll, pending identities, session focus.</td></tr>
+              <tr><td>RAG Arena</td><td><a href="/rag-arena">/rag-arena</a></td><td>Upload documents, rebuild FTS index, inspect chunks.</td></tr>
+              <tr><td>Mobile voice test</td><td><a href="/mobile-voice-test">/mobile-voice-test</a></td><td>Browser mic + voice WebSocket test.</td></tr>
+              <tr><td>Mobile voice + vision</td><td><a href="/mobile-voice-vision-test">/mobile-voice-vision-test</a></td><td>Mic + camera JPEG + voice/vision WebSockets.</td></tr>
+              <tr><td>Playground (WebRTC)</td><td><a href="/client">/client</a></td><td>Pipecat WebRTC client.</td></tr>
+              <tr><td>Diagnose</td><td><a href="/diagnose">/diagnose</a></td><td>Connectivity diagnostics.</td></tr>
+              <tr><td>This guide</td><td><a href="/user-guide">/user-guide</a></td><td>Operator reference (this page).</td></tr>
+            </tbody>
+          </table>
+          <div class="callout warn">
+            <strong>Separate origins:</strong> <code>https://127.0.0.1:7860</code> and <code>https://127.0.0.1:8088</code> use different browser storage. Pick one URL and stay on it for sessions and settings.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="components">
+        <h2>Application components — how to use each</h2>
+        <div class="body">
+
+          <h3>Assistant Console</h3>
+          <p>The main workspace for offline voice and text AI.</p>
+          <ul>
+            <li><strong>Text chat</strong> — Select or create a session; messages persist (see <a href="#persistence">Persistence</a>). Toggle RAG per session.</li>
+            <li><strong>Instructions</strong> — Pick a preset from the dropdown (loaded from <code>docs/instructions/</code>). Edit presets in Instructions Manager.</li>
+            <li><strong>Voice</strong> — Start voice mode; uses Nemotron ASR + active LLM + XTTS. With camera enabled, JPEG frames feed vision captions via Ollama.</li>
+            <li><strong>Live camera</strong> — Vision augment adds <code>[Camera context]</code> to matching utterances (or every turn if opted in).</li>
+            <li><strong>Attachments</strong> — Upload files per chat session; stored on disk and available to RAG/tools.</li>
+            <li><strong>LLM Routing</strong> — Switch local llama vs Ollama; <strong>Apply Routing</strong> restarts the stack. Requires admin token in LAN mode.</li>
+            <li><strong>Local tools</strong> — Optional agent path: RAG search, calendar, HTTP connectors (allowlisted hosts only).</li>
+            <li><strong>Power &amp; GPU time</strong> — Tracks Wh and GPU utilization while the page is open; syncs to server file.</li>
+            <li><strong>RAG panel</strong> — Status, rebuild index (admin), open RAG Arena.</li>
+          </ul>
+
+          <h3>Session Manager</h3>
+          <ul>
+            <li>Create, rename, or delete chat sessions.</li>
+            <li><strong>Clear all histories</strong> — Wipes messages but keeps session names and settings.</li>
+            <li>Syncs from server on load (merges with browser copy).</li>
+            <li><strong>Open selected in Assistant</strong> — Sets active session and navigates to the console.</li>
+          </ul>
+
+          <h3>Instructions Manager</h3>
+          <ul>
+            <li>Lists presets from repo (<code>docs/instructions/*.md</code>) and bundled copies.</li>
+            <li><strong>Repo</strong> badges are editable/deletable; <strong>bundled</strong> are read-only until you Save to create a repo override.</li>
+            <li>Save / Save As / Delete require admin token when <code>admin_token_required</code> is true.</li>
+          </ul>
+
+          <h3>Face Manager</h3>
+          <ul>
+            <li><strong>Turn ON/OFF</strong> — Enables server face pipeline; persisted to <code>facerecog_runtime.json</code>.</li>
+            <li><strong>Camera capture</strong> — Detect faces, add pending <code>stub_vs_*</code> identities.</li>
+            <li><strong>Extract from files</strong> — Batch enroll from uploaded images.</li>
+            <li><strong>Enroll / rename</strong> — Assign display names to person IDs.</li>
+            <li><strong>Vision session focus</strong> (advanced) — Pin auto / multiface / person for a <code>vision_session_id</code>.</li>
+            <li>All mutations require admin token in admin mode.</li>
+          </ul>
+
+          <h3>RAG Arena</h3>
+          <ul>
+            <li>Upload <code>.md</code> / <code>.txt</code> (and supported types) into the offline FTS index.</li>
+            <li><strong>Rebuild index</strong> — Ingests <code>offline_setup/rag_data/documents/</code> (admin token in LAN mode).</li>
+            <li>Remove files, inspect chunk stats, test queries.</li>
+          </ul>
+
+          <h3>Mobile test pages</h3>
+          <ul>
+            <li><strong>/mobile-voice-test</strong> — Raw voice WebSocket without full console UI.</li>
+            <li><strong>/mobile-voice-vision-test</strong> — Validates mic + camera + vision pipeline end-to-end.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel" id="models">
+        <h2>Models &amp; GPU services</h2>
+        <div class="body">
+          <p>Run <code>./offline_setup/lisa_stack.sh status</code> for live GPU memory and the <strong>Models in use</strong> table. Typical roles:</p>
+
+          <table>
+            <thead>
+              <tr><th>Role</th><th>Model / service</th><th>Where it runs</th><th>GPU / memory</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Dialogue LLM</strong></td>
+                <td><code>gemma4-26b-a4b-it-q4_K_M-local</code> (primary)<br>or <code>gemma4:e2b-it-q4_K_M</code> (Ollama fallback)</td>
+                <td>Docker <code>lisa-llama-primary</code> → <code>http://127.0.0.1:8000/v1</code><br>or Ollama → <code>http://127.0.0.1:11434/v1</code></td>
+                <td>Largest consumer (~16+ GiB on GPU when local llama loaded). GGUF: <code>offline_setup/models/gemma-4-26B-A4B-it-Q4_K_M.gguf</code></td>
+              </tr>
+              <tr>
+                <td><strong>Vision / captions</strong></td>
+                <td><code>gemma4:e2b-it-q4_K_M</code> (default)</td>
+                <td>Ollama on <code>http://127.0.0.1:11434/v1</code></td>
+                <td>Loads on first vision question (<code>ollama ps</code>). Separate from dialogue LLM when using local llama primary.</td>
+              </tr>
+              <tr>
+                <td><strong>TTS</strong></td>
+                <td>Coqui XTTS v2<br>voice: <code>Andrew Chipper</code></td>
+                <td>Docker <code>xtts-tts</code> → <code>http://127.0.0.1:80</code></td>
+                <td>~2–3 GiB GPU typical. Data: <code>offline_setup/xtts_tts_data/</code></td>
+              </tr>
+              <tr>
+                <td><strong>ASR</strong></td>
+                <td>Nemotron streaming EN<br><code>nvidia/nemotron-speech-streaming-en-0.6b</code></td>
+                <td>Docker <code>nemotron</code> → <code>http://127.0.0.1:8080</code></td>
+                <td>~3 GiB GPU typical. ASR-only mode (no LLM/TTS in container).</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>Routing &amp; switching models</h3>
+          <ul>
+            <li><strong>Assistant Console → LLM Routing</strong> — Choose <em>local llama</em> or <em>Ollama</em>, then Apply Routing (restarts stack).</li>
+            <li><strong>Env before start</strong> — <code>USE_LOCAL_LLAMA_PRIMARY=0 NVIDIA_LLM_MODEL=gemma4:e2b-it-q4_K_M ./offline_setup/lisa_stack.sh start</code></li>
+            <li><strong>Vision model</strong> — Set <code>VISION_OLLAMA_MODEL</code> before start; pull with <code>ollama pull &lt;tag&gt;</code>.</li>
+          </ul>
+
+          <h3>VRAM tips</h3>
+          <ul>
+            <li>Stack unloads Ollama runners at start to free VRAM for XTTS + local llama.</li>
+            <li>If OOM: lower <code>LOCAL_LLAMA_N_GPU_LAYERS</code> or <code>LOCAL_LLAMA_CTX_SIZE</code>; use smaller Ollama tags; run <code>ollama stop</code> after vision sessions.</li>
+            <li>Check <code>nvidia-smi</code> and the status table after start.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel" id="security">
+        <h2>Security model — what we protect and how safe this is</h2>
+        <div class="body">
+          <p>
+            Lisa is an <strong>offline, self-hosted real-time voice assistant</strong> for a trusted home or lab network — not a multi-user cloud product.
+            Security is built around <strong>defense in depth for local/LAN deployment</strong>: safe defaults, gated admin actions, browser hardening, and input size limits.
+            It is <strong>appropriate for personal use on your own machine or LAN with a shared admin token</strong>; it is <strong>not</strong> designed as internet-facing SaaS with per-user accounts, RBAC, or audit trails.
+          </p>
+
+          <div class="callout ok">
+            <strong>Default posture (home dev):</strong> the stack binds to <code>127.0.0.1</code> only — not reachable from other devices unless you explicitly start with <code>--admin</code>.
+            Mutating admin APIs are allowed from localhost without a token in that mode.
+          </div>
+
+          <h3 id="security-layers">Security layers we enforce</h3>
+          <table>
+            <thead>
+              <tr><th>Layer</th><th>What it does</th><th>Where</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Network bind</strong></td>
+                <td>Default <code>127.0.0.1</code> (loopback). LAN/public only with <code>--admin</code> + <code>LISA_BIND_PUBLIC=1</code>.</td>
+                <td><code>lisa_stack.sh</code>, <code>start_current_stack.sh</code></td>
+              </tr>
+              <tr>
+                <td><strong>HTTPS (TLS)</strong></td>
+                <td>Browser UI on port <strong>7860</strong> via local TLS proxy (self-signed cert). Mic/camera require secure context on many browsers.</td>
+                <td><code>tls_tcp_proxy.py</code>, <code>offline_setup/certs/</code></td>
+              </tr>
+              <tr>
+                <td><strong>Admin auth gate</strong></td>
+                <td>All mutating <code>POST/PUT/PATCH/DELETE</code> under <code>/api/*</code> pass through a gate. In LAN mode: <code>Authorization: Bearer &lt;LISA_ADMIN_TOKEN&gt;</code> (constant-time compare). Fail-closed if public bind without token configured.</td>
+                <td><code>pipecat_offline_patch.py</code></td>
+              </tr>
+              <tr>
+                <td><strong>User vs admin API split</strong></td>
+                <td>Chat, attachments, session sync, vision preview, power-stats POST — allowed without admin token (still same-origin from browser). Stack restart, RAG ingest/delete, instructions save, face mutations — admin only in LAN mode.</td>
+                <td><code>_LISA_USER_API_PREFIXES</code> allowlist</td>
+              </tr>
+              <tr>
+                <td><strong>Content-Security-Policy</strong></td>
+                <td>HTML pages get CSP: <code>default-src 'self'</code>, no external scripts, <code>connect-src 'self' ws: wss:</code>, <code>frame-ancestors 'none'</code>, <code>object-src 'none'</code>. Inline script/style allowed (SPA requirement).</td>
+                <td>Response headers on HTML</td>
+              </tr>
+              <tr>
+                <td><strong>Other browser headers</strong></td>
+                <td><code>X-Frame-Options: DENY</code>, <code>X-Content-Type-Options: nosniff</code>, <code>Referrer-Policy: same-origin</code>, <code>Cross-Origin-Opener-Policy: same-origin</code>, Permissions-Policy (camera/mic self-only).</td>
+                <td>All HTML responses</td>
+              </tr>
+              <tr>
+                <td><strong>WebSocket same-origin</strong></td>
+                <td>Assistant Console forces voice/vision WebSocket URLs to same host — blocks arbitrary remote WS endpoints from UI config.</td>
+                <td><code>sci_fi_assistant.html</code></td>
+              </tr>
+              <tr>
+                <td><strong>Offline tool egress</strong></td>
+                <td>Local agent HTTP connectors restricted to allowlisted hosts (<code>127.0.0.1</code>, <code>localhost</code> by default). No open internet proxy from tools unless you expand <code>TOOL_HTTP_ALLOW_*</code>.</td>
+                <td><code>local_tool_executor.py</code></td>
+              </tr>
+              <tr>
+                <td><strong>Upload &amp; body limits</strong></td>
+                <td>Attachment streaming cap (<code>CHAT_ATTACH_MAX_BYTES</code>, default 20 MiB) with early 413. Power-stats and context-stress payloads schema-whitelisted and size-capped. PDF/text extraction caps.</td>
+                <td><code>chat_attachments.py</code>, power-stats API</td>
+              </tr>
+              <tr>
+                <td><strong>Secrets hygiene</strong></td>
+                <td><code>lisa_admin_token.env</code> is gitignored. Token never committed. UI stores token in browser <code>localStorage</code> for convenience (not on server disk).</td>
+                <td>Repo + browser</td>
+              </tr>
+              <tr>
+                <td><strong>Cache control</strong></td>
+                <td>Manager pages and sensitive API paths send <code>Cache-Control: no-store</code> to reduce stale UI/token confusion.</td>
+                <td>HTTP middleware</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>How secure is this in practice?</h3>
+          <table>
+            <thead>
+              <tr><th>Scenario</th><th>Rating</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Solo dev on same PC (<code>start</code>, loopback)</td>
+                <td><strong>Good</strong></td>
+                <td>Not exposed to LAN; admin actions local-only. Main risk is local malware or shared user account on the machine.</td>
+              </tr>
+              <tr>
+                <td>Home LAN with <code>--admin</code> + strong token</td>
+                <td><strong>Good for trusted home Wi‑Fi</strong></td>
+                <td>Admin mutations require Bearer token. Chat/vision still usable without token — anyone on LAN who can reach the URL can use the assistant (by design).</td>
+              </tr>
+              <tr>
+                <td>LAN without admin token (public bind, no secret)</td>
+                <td><strong>Poor — avoid</strong></td>
+                <td>Server returns 503 fail-closed for admin routes if misconfigured; do not rely on this — always set <code>LISA_ADMIN_TOKEN</code> for LAN.</td>
+              </tr>
+              <tr>
+                <td>Exposed to the public internet</td>
+                <td><strong>Not supported</strong></td>
+                <td>No rate limiting, no user accounts, no WAF, self-signed TLS, shared secret auth. Use VPN or reverse proxy with proper auth if you must reach it remotely.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3 id="security-limits">What we do not protect (honest limits)</h3>
+          <ul>
+            <li><strong>No per-user login</strong> — one shared admin token, not individual accounts or roles.</li>
+            <li><strong>Chat is not admin-gated</strong> — on LAN, anyone who can open the console can send messages and use voice/vision (user-facing APIs intentionally open).</li>
+            <li><strong>Self-signed HTTPS</strong> — browsers will warn on first visit; you must trust your own cert or install it locally.</li>
+            <li><strong>Camera, mic, face data</strong> — processed locally; you are responsible for physical access and who you enroll in Face Manager.</li>
+            <li><strong>RAG and attachments</strong> — content you upload is stored on disk under <code>rag_data/</code>; protect filesystem permissions on shared machines.</li>
+            <li><strong>Ollama / Docker</strong> — separate services; keep them on loopback and firewall LAN ports you do not need.</li>
+            <li><strong>nginx :8088</strong> — optional second origin; same security rules apply, but separate browser storage (pick one URL consistently).</li>
+          </ul>
+
+          <h3>Security best practices</h3>
+          <ol>
+            <li>Use <code>./offline_setup/lisa_stack.sh start</code> for solo local work; only use <code>--admin</code> when you need LAN/phone access.</li>
+            <li>Generate a long random token: <code>openssl rand -hex 24</code>. Never commit <code>lisa_admin_token.env</code>.</li>
+            <li>Keep the stack on a trusted home network; do not port-forward 7860/8088 to the internet without a proper VPN or authenticated reverse proxy.</li>
+            <li>Verify mode after start: <code>curl -sk https://127.0.0.1:7860/api/admin/capabilities</code></li>
+            <li>Clear stale tokens in the browser if you rotate <code>LISA_ADMIN_TOKEN</code> (LLM Routing field or manager sidebar).</li>
+            <li>Restrict <code>TOOL_HTTP_ALLOW_HOSTS</code> unless you explicitly need LAN connector URLs.</li>
+          </ol>
+
+          <p class="muted">Full remediation history (Phases 1–7): <code>docs/remediation-phases-2026-05.md</code>. Admin token details: see <a href="#admin">Admin role</a> below.</p>
+        </div>
+      </section>
+
+      <section class="panel" id="admin">
+        <h2>Admin role &amp; security token</h2>
+        <div class="body">
+          <p><code>LISA_ADMIN_TOKEN</code> is a shared secret (not a user login). It protects <strong>mutating</strong> admin APIs when the stack is reachable beyond trusted localhost-only use.</p>
+
+          <h3>Bind profiles</h3>
+          <table>
+            <thead>
+              <tr><th>Profile</th><th>Command</th><th>Bind</th><th>Token required?</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Home dev</td>
+                <td><code>lisa_stack.sh start</code></td>
+                <td><code>127.0.0.1</code> only</td>
+                <td>No — loopback bypass for admin mutations</td>
+              </tr>
+              <tr>
+                <td>Admin / LAN</td>
+                <td><code>lisa_stack.sh start --admin</code></td>
+                <td><code>0.0.0.0</code> (7860/7861)</td>
+                <td>Yes — Bearer on all gated admin routes, even from this PC</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3 id="admin-setup">Setup &amp; usage</h3>
+          <ol>
+            <li>Copy <code>offline_setup/lisa_admin_token.env.example</code> → <code>lisa_admin_token.env</code> (gitignored).</li>
+            <li>Set <code>LISA_ADMIN_TOKEN</code> — generate: <code>openssl rand -hex 24</code></li>
+            <li>Start with <code>./offline_setup/lisa_stack.sh start --admin</code></li>
+            <li>Paste token in UI fields (saved to browser <code>localStorage</code>):
+              <ul>
+                <li>Assistant Console → <strong>LLM Routing → Admin token</strong></li>
+                <li>Face Manager, Instructions Manager, RAG Arena — sidebar admin fields</li>
+              </ul>
+            </li>
+            <li>Sent as header: <code>Authorization: Bearer &lt;token&gt;</code></li>
+          </ol>
+
+          <h3 id="admin-features">Features requiring admin token (LAN / admin mode)</h3>
+          <table>
+            <thead>
+              <tr><th>Feature / API</th><th>UI location</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>POST /api/llm-routing/apply</code></td><td>LLM Routing → Apply Routing (Restart Stack)</td></tr>
+              <tr><td><code>POST /api/stack/restart</code></td><td>Full stack restart actions</td></tr>
+              <tr><td><code>POST /api/rag/ingest</code></td><td>RAG panel Rebuild; RAG Arena rebuild</td></tr>
+              <tr><td><code>POST /api/rag/upload</code>, <code>/remove</code>, <code>/remove-many</code></td><td>RAG Arena upload/delete</td></tr>
+              <tr><td><code>POST/PUT/DELETE /api/instructions</code></td><td>Instructions Manager save/delete</td></tr>
+              <tr><td><code>POST/DELETE /api/face/*</code> (mutations)</td><td>Face Manager: ON/OFF, enroll, capture, delete, focus, quality</td></tr>
+              <tr><td><code>POST /api/context-stress/run</code></td><td>Context stress UI (when <code>ENABLE_CONTEXT_STRESS_RUN_API=1</code>)</td></tr>
+              <tr><td>Other mutating <code>/api/*</code> not in user allowlist</td><td>Various admin endpoints</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Does NOT require admin token (user-facing)</h3>
+          <ul>
+            <li>Text chat — <code>POST /api/text-chat/completions</code></li>
+            <li>Chat attachments — <code>POST /api/chat/attachments</code></li>
+            <li>Chat session sync — <code>GET/PUT /api/assistant-console/chat-sessions</code></li>
+            <li>Vision preview — <code>POST /api/vision/preview</code></li>
+            <li>Power stats mirror — <code>POST /api/assistant-console/power-stats</code></li>
+            <li>Read-only GET — <code>/api/runtime-status</code>, <code>/api/instructions</code>, <code>/api/face/persons</code>, etc.</li>
+          </ul>
+
+          <div class="callout warn">
+            After editing <code>lisa_admin_token.env</code>, use <code>restart --admin</code> — a plain <code>start</code> without <code>--admin</code> resets to home dev and clears the token from the process environment.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="persistence">
+        <h2>Data persistence</h2>
+        <div class="body">
+          <p>Understanding what survives browser refresh, stack restart, and which storage is per-origin vs shared on disk.</p>
+
+          <h3 id="persistence-matrix">Complete reference — how, where, why</h3>
+          <table>
+            <thead>
+              <tr><th>Content</th><th>How it is saved</th><th>Where it lives</th><th>Why / notes</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Chat sessions &amp; messages</td>
+                <td>Browser <code>localStorage</code> on edit; debounced <code>PUT</code> to server; merge on load by <code>updatedAt</code></td>
+                <td>Browser: <code>assistantConsole.sessions.v1</code><br>Server: <code>offline_setup/app/assistant_console_chat_sessions.v1.json</code></td>
+                <td>Survive refresh and stack restart. Separate per browser origin (:7860 vs :8088).</td>
+              </tr>
+              <tr>
+                <td>Active chat session id</td>
+                <td>Set when switching sessions; synced with server payload</td>
+                <td><code>assistantConsole.activeSession.v1</code> (browser) + server <code>activeId</code></td>
+                <td>Restore last open session on page load.</td>
+              </tr>
+              <tr>
+                <td>LLM generation settings</td>
+                <td>On change in LLM Routing panel</td>
+                <td><code>assistantConsole.llmGen.v1</code> (browser localStorage)</td>
+                <td>Temperature, top-p, etc. persist across tabs (migrated from sessionStorage).</td>
+              </tr>
+              <tr>
+                <td>Admin token (UI)</td>
+                <td>Paste in admin field; blur/change persists</td>
+                <td><code>assistantConsole.lisaAdminToken.v1</code> (browser)</td>
+                <td>Convenience only — server reads env at process start, not this value.</td>
+              </tr>
+              <tr>
+                <td>Instruction presets</td>
+                <td>Instructions Manager POST/PUT writes markdown files</td>
+                <td><code>docs/instructions/*.md</code> (repo, preferred)<br><code>offline_setup/app/presets/instructions/</code> (bundled fallback)</td>
+                <td>System prompts for chat/voice. Bundled copies read-only until saved as repo override.</td>
+              </tr>
+              <tr>
+                <td>Face registry (people)</td>
+                <td>Enroll/delete via Face Manager API</td>
+                <td><code>offline_setup/app/rag_data/face_registry.sqlite</code></td>
+                <td>Stable person IDs, display names, turn history metadata.</td>
+              </tr>
+              <tr>
+                <td>Face recognition ON/OFF</td>
+                <td>Face Manager toggle or env <code>FACERECOG_ENABLED=1</code></td>
+                <td><code>offline_setup/app/rag_data/facerecog_runtime.json</code></td>
+                <td>Runtime enable without restarting shell env.</td>
+              </tr>
+              <tr>
+                <td>RAG document index</td>
+                <td>Ingest/rebuild via API or RAG Arena</td>
+                <td><code>offline_setup/rag_data/</code> (FTS SQLite + <code>documents/</code>)</td>
+                <td>Offline full-text search for tool RAG and arena.</td>
+              </tr>
+              <tr>
+                <td>Chat file attachments</td>
+                <td>Upload in Assistant Console</td>
+                <td><code>offline_setup/rag_data/attachments/{session_id}/</code></td>
+                <td>Per chat session files on disk; tied to chat session UUID.</td>
+              </tr>
+              <tr>
+                <td>Power &amp; GPU time stats</td>
+                <td>Console polls runtime; POST merges with <code>max()</code></td>
+                <td>Server: <code>offline_setup/app/assistant_console_power_stats.v1.json</code><br>Browser: <code>assistantConsole.powerStats.v1</code>, related keys</td>
+                <td>Cumulative Wh/GPU time; server totals shared across origins after sync.</td>
+              </tr>
+              <tr>
+                <td>Last vision session id</td>
+                <td>Set when starting voice with camera</td>
+                <td><code>assistantConsole.lastVisionSessionId.v1</code> (browser)</td>
+                <td>Face Manager can paste this for session focus continuity.</td>
+              </tr>
+              <tr>
+                <td>Stack mode (provider/model)</td>
+                <td>Written at each successful start</td>
+                <td><code>/tmp/stack_mode.txt</code></td>
+                <td>Shown in <code>status</code> and <code>/api/runtime-status</code>.</td>
+              </tr>
+              <tr>
+                <td>Vision / face session state</td>
+                <td>In-memory during live WebSocket sessions</td>
+                <td>Server RAM (<code>vision_session_store</code>)</td>
+                <td><strong>Not</strong> persisted across stack restart — reconnect camera/voice after restart.</td>
+              </tr>
+              <tr>
+                <td>Process logs</td>
+                <td>Append on run; rotate &gt;5 MiB on start</td>
+                <td><code>/tmp/bot.log</code>, <code>/tmp/https_proxy.log</code></td>
+                <td>Debugging; rotated to <code>.prev</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="logs">
+        <h2>Logs &amp; troubleshooting</h2>
+        <div class="body">
+          <table>
+            <thead>
+              <tr><th>Issue</th><th>Check</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Stack not responding</td>
+                <td><code>./offline_setup/lisa_stack.sh status</code> then <code>restart</code></td>
+              </tr>
+              <tr>
+                <td>Wrong directory</td>
+                <td>Must be in <code>lisa/nvidia_voice</code>, not <code>offline_setup/app</code></td>
+              </tr>
+              <tr>
+                <td><code>This site can't be reached</code> on :7860</td>
+                <td>Use <code>https://</code> not <code>http://</code>. Or try <code>http://127.0.0.1:7861</code></td>
+              </tr>
+              <tr>
+                <td>Missing admin token error</td>
+                <td>Start with <code>--admin</code>; paste token in UI; verify <code>/api/admin/capabilities</code></td>
+              </tr>
+              <tr>
+                <td>Vision captions fail</td>
+                <td>Ollama on :11434; <code>ollama pull gemma4:e2b-it-q4_K_M</code>; see status vision section</td>
+              </tr>
+              <tr>
+                <td>VRAM OOM</td>
+                <td>Lower ctx/layers; <code>ollama stop</code>; check status GPU table</td>
+              </tr>
+              <tr>
+                <td>Sessions missing after restart</td>
+                <td>Same URL origin; check server file <code>assistant_console_chat_sessions.v1.json</code></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>Log files</h3>
+          <ul>
+            <li><code>/tmp/bot.log</code> — Bot and API errors</li>
+            <li><code>/tmp/https_proxy.log</code> — TLS proxy</li>
+            <li><code>tail -f /tmp/bot.log</code> — Live tail during debugging</li>
+            <li>Vision debug: <code>grep vision_augment /tmp/bot.log | tail</code></li>
+          </ul>
+
+          <p class="muted">Extended documentation in the repo: <code>docs/stack-start-stop.md</code>, <code>docs/admin-token-and-security.md</code>, <code>docs/links.md</code>, <code>docs/power-gpu-stats.md</code>.</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="/lisa-admin-ui.js"></script>
+  <script>
+    if (window.LisaAdminUI?.init) {
+      window.LisaAdminUI.init({});
+    }
+  </script>
+</body>
+</html>

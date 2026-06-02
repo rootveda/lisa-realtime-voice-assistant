@@ -1,0 +1,55 @@
+# --- Secrets & env (never commit) ---
+offline_setup/lisa_admin_token.env
+*.env
+!.env.example
+!offline_setup/lisa_admin_token.env.example
+
+# --- Runtime / user data (PII-adjacent) ---
+offline_setup/rag_data/*
+!offline_setup/rag_data/documents/
+!offline_setup/rag_data/attachments/
+offline_setup/rag_data/documents/*
+!offline_setup/rag_data/documents/.gitkeep
+offline_setup/rag_data/attachments/*
+!offline_setup/rag_data/attachments/.gitkeep
+
+offline_setup/app/rag_data/*
+!offline_setup/app/rag_data/.gitkeep
+
+offline_setup/app/assistant_console_*.v1.json
+offline_setup/e2e_result.txt
+
+# --- TURN / WebRTC credentials (local) ---
+offline_setup/.turn_pass
+offline_setup/.turn_user
+
+# --- Runtime samples & test output ---
+offline_setup/app/data/
+**/test-results/
+
+# --- Large local artifacts (download / build locally) ---
+.venv/
+.cache/
+offline_setup/models/
+offline_setup/hf_cache/
+offline_setup/bundle/
+offline_setup/xtts_tts_data/
+offline_setup/xtts_hf_cache/
+
+# --- Dependencies & caches ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+offline_setup/app/tests/e2e/node_modules/
+
+# --- Logs & IDE ---
+*.log
+offline_setup/app/logs/
+.cursor/
+
+# --- OS ---
+.DS_Store
+Thumbs.db

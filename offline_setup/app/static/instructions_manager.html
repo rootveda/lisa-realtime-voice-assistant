@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Instructions Manager</title>
+  <style>
+    body { margin: 0; padding: 16px; font-family: Inter, Segoe UI, Roboto, Arial, sans-serif; background: #070b14; color: #dff6ff; }
+    h1 { margin: 0 0 12px; font-size: 16px; color: #45e6ff; letter-spacing: .06em; text-transform: uppercase; }
+    .grid { display: grid; grid-template-columns: 380px 1fr; gap: 12px; min-height: calc(100vh - 56px); }
+    .panel { border: 1px solid #243357; border-radius: 10px; background: #0b1426; overflow: hidden; }
+    .panel h2 { margin: 0; padding: 10px 12px; font-size: 13px; color: #45e6ff; border-bottom: 1px solid #243357; background: #101b32; }
+    .tools, .editor { padding: 10px; display: grid; gap: 8px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button, input, textarea, select { background:#0d162b; color:#dff6ff; border:1px solid #24416b; border-radius:8px; padding:8px 10px; font: inherit; }
+    textarea { min-height: 420px; resize: vertical; }
+    button { cursor: pointer; }
+    .muted { color: #8cb8c7; font-size: 12px; }
+    #list { max-height: calc(100vh - 165px); overflow: auto; }
+    .item { border: 1px solid #24416b; border-radius: 8px; padding: 8px; margin-bottom: 8px; cursor: pointer; }
+    .item.active { border-color: #45e6ff; box-shadow: 0 0 0 1px rgba(69, 230, 255, 0.2) inset; }
+    .item .id { font-weight: 600; }
+    .badge { font-size: 10px; border: 1px solid #24416b; border-radius: 999px; padding: 2px 6px; margin-left: 6px; }
+    .badge.repo { color: #9df59d; border-color: #2c7a2c; }
+    .badge.bundled { color: #eac68b; border-color: #8b5f2c; }
+    .status { min-height: 20px; font-size: 12px; color: #8cb8c7; }
+    .security-mode-banner { margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 12px; line-height: 1.45; border: 1px solid #24416b; }
+  </style>
+</head>
+<body>
+  <h1>Instructions Manager</h1>
+  <div class="grid">
+    <div class="panel">
+      <h2>Saved instruction presets</h2>
+      <div class="tools">
+        <div class="row">
+          <button id="refreshBtn" type="button">Refresh</button>
+          <button id="newBtn" type="button">New</button>
+          <button id="openAssistantBtn" type="button">Open Assistant</button>
+          <button id="openGuideBtn" type="button" onclick="location.href='/user-guide'">Operator Guide</button>
+        </div>
+        <div class="muted">Repo = editable/deletable. Bundled = read-only until you save an override.</div>
+        <div id="list"></div>
+        <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite">Checking security mode…</div>
+        <label id="instrAdminTokenWrap" class="muted" data-lisa-admin-token-wrap style="display:none;">
+          Admin token (save/delete in admin mode)
+          <input type="password" id="instrAdminTokenInput" data-lisa-admin-token data-lisa-admin-token-focus autocomplete="off" placeholder="Paste LISA_ADMIN_TOKEN" style="width:100%;margin-top:4px;" />
+        </label>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Editor</h2>
+      <div class="editor">
+        <div class="row">
+          <input id="idInput" placeholder="id e.g. assistant_professional_natural" style="flex:1;" />
+          <input id="titleInput" placeholder="Title (optional heading)" style="flex:1;" />
+        </div>
+        <textarea id="promptInput" placeholder="Instruction markdown..."></textarea>
+        <div class="row">
+          <button id="saveBtn" type="button">Save</button>
+          <button id="saveAsBtn" type="button">Save As New</button>
+          <button id="deleteBtn" type="button">Delete</button>
+        </div>
+        <div id="status" class="status"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/lisa-admin-ui.js"></script>
+  <script>
+    const listEl = document.getElementById("list");
+    const idInputEl = document.getElementById("idInput");
+    const titleInputEl = document.getElementById("titleInput");
+    const promptInputEl = document.getElementById("promptInput");
+    const statusEl = document.getElementById("status");
+    const saveBtnEl = document.getElementById("saveBtn");
+    const saveAsBtnEl = document.getElementById("saveAsBtn");
+    const deleteBtnEl = document.getElementById("deleteBtn");
+    const refreshBtnEl = document.getElementById("refreshBtn");
+    const newBtnEl = document.getElementById("newBtn");
+    const openAssistantBtnEl = document.getElementById("openAssistantBtn");
+
+    let items = [];
+    let currentId = "";
+    let currentSource = "missing";
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = String(s ?? "");
+      return d.innerHTML;
+    }
+    function setStatus(msg, isErr = false) {
+      statusEl.textContent = String(msg || "");
+      statusEl.style.color = isErr ? "#ff9ea0" : "#8cb8c7";
+    }
+    async function instrMutatingFetch(url, options = {}, actionLabel = "Save instruction") {
+      if (window.LisaAdminUI?.ensureAdminToken && !(await window.LisaAdminUI.ensureAdminToken(actionLabel))) {
+        throw new Error("Admin token required.");
+      }
+      window.LisaAdminUI?.persistToken?.();
+      const headers = { ...(options.headers || {}) };
+      if (window.LisaAdminUI?.adminHeaders) Object.assign(headers, window.LisaAdminUI.adminHeaders(headers));
+      const res = await fetch(url, { ...options, headers });
+      let data = null;
+      try { data = await res.clone().json(); } catch (_) {}
+      if (window.LisaAdminUI?.checkAuthResponse && (await window.LisaAdminUI.checkAuthResponse(res, data, actionLabel))) {
+        throw new Error("Admin token required.");
+      }
+      return { res, data };
+    }
+    function titleFromPrompt(prompt, fallback = "") {
+      const lines = String(prompt || "").split(/\r?\n/);
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t) continue;
+        if (t.startsWith("#")) return t.replace(/^#+\s*/, "").trim();
+        return fallback;
+      }
+      return fallback;
+    }
+    function bodyWithoutHeading(prompt) {
+      const raw = String(prompt || "");
+      const lines = raw.split(/\r?\n/);
+      if (!lines.length) return raw;
+      const first = lines[0].trim();
+      if (!first.startsWith("#")) return raw;
+      while (lines.length && !lines[0].trim()) lines.shift();
+      lines.shift();
+      while (lines.length && !lines[0].trim()) lines.shift();
+      return lines.join("\n");
+    }
+    function renderList() {
+      if (!items.length) {
+        listEl.innerHTML = '<div class="muted">No instruction presets.</div>';
+        return;
+      }
+      listEl.innerHTML = items.map((x) => {
+        const src = String(x.source || "missing");
+        const badgeCls = src === "repo" ? "repo" : "bundled";
+        const active = x.id === currentId ? "active" : "";
+        return `<div class="item ${active}" data-id="${esc(x.id)}">
+          <div class="id">${esc(x.id)} <span class="badge ${badgeCls}">${esc(src)}</span></div>
+          <div class="muted">${esc(x.label || x.filename || x.id)}</div>
+        </div>`;
+      }).join("");
+      listEl.querySelectorAll(".item").forEach((el) => {
+        el.addEventListener("click", () => {
+          const id = el.getAttribute("data-id") || "";
+          loadOne(id).catch((e) => setStatus(e.message, true));
+        });
+      });
+    }
+    async function loadList(preferId = "") {
+      const res = await fetch("/api/instructions", { cache: "no-store" });
+      if (!res.ok) throw new Error(`Failed to load list (${res.status})`);
+      const data = await res.json();
+      items = Array.isArray(data.items) ? data.items : [];
+      const nextId = preferId || currentId || data.default_id || items[0]?.id || "";
+      renderList();
+      if (nextId) {
+        await loadOne(nextId);
+      } else {
+        newDraft();
+      }
+    }
+    async function loadOne(id) {
+      if (!id) return;
+      const res = await fetch("/api/instructions/" + encodeURIComponent(id), { cache: "no-store" });
+      if (!res.ok) throw new Error(`Failed to load instruction (${res.status})`);
+      const data = await res.json();
+      currentId = data.id || id;
+      currentSource = String(data.source || "missing");
+      idInputEl.value = currentId;
+      titleInputEl.value = titleFromPrompt(data.prompt || "", data.label || currentId);
+      promptInputEl.value = bodyWithoutHeading(data.prompt || "");
+      deleteBtnEl.disabled = currentSource !== "repo";
+      setStatus(currentSource === "bundled" ? "Bundled preset: Save to create editable repo override." : "");
+      renderList();
+    }
+    function newDraft() {
+      currentId = "";
+      currentSource = "missing";
+      idInputEl.value = "";
+      titleInputEl.value = "";
+      promptInputEl.value = "";
+      deleteBtnEl.disabled = true;
+      renderList();
+      setStatus("New draft.");
+    }
+    function validateId(v) {
+      return /^[a-zA-Z][a-zA-Z0-9_-]{0,127}$/.test(String(v || ""));
+    }
+    async function saveCurrent(overwrite = true) {
+      const id = idInputEl.value.trim();
+      const title = titleInputEl.value.trim();
+      const prompt = promptInputEl.value.trim();
+      if (!validateId(id)) {
+        setStatus("Invalid id. Use letters/numbers/_/- and start with a letter.", true);
+        return;
+      }
+      if (!prompt) {
+        setStatus("Prompt cannot be empty.", true);
+        return;
+      }
+      const url = currentId && id === currentId ? "/api/instructions/" + encodeURIComponent(id) : "/api/instructions";
+      const method = currentId && id === currentId ? "PUT" : "POST";
+      const body = method === "POST"
+        ? { id, title, prompt, overwrite }
+        : { title, prompt };
+      const { res, data } = await instrMutatingFetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }, "Save instruction");
+      if (!res.ok) throw new Error(data?.error || `Save failed (${res.status})`);
+      currentId = id;
+      setStatus("Saved.");
+      await loadList(id);
+    }
+    async function deleteCurrent() {
+      const id = currentId || idInputEl.value.trim();
+      if (!id) return;
+      if (!confirm(`Delete instruction "${id}" from repo docs?`)) return;
+      const { res, data } = await instrMutatingFetch(
+        "/api/instructions/" + encodeURIComponent(id),
+        { method: "DELETE" },
+        "Delete instruction",
+      );
+      if (!res.ok) throw new Error(data?.error || `Delete failed (${res.status})`);
+      newDraft();
+      setStatus("Deleted.");
+      await loadList();
+    }
+
+    refreshBtnEl.addEventListener("click", () => loadList(currentId).catch((e) => setStatus(e.message, true)));
+    newBtnEl.addEventListener("click", () => newDraft());
+    openAssistantBtnEl.addEventListener("click", () => { location.href = "/assistant-console"; });
+    saveBtnEl.addEventListener("click", () => saveCurrent(true).catch((e) => setStatus(e.message, true)));
+    saveAsBtnEl.addEventListener("click", () => {
+      currentId = "";
+      saveCurrent(false).catch((e) => setStatus(e.message, true));
+    });
+    deleteBtnEl.addEventListener("click", () => deleteCurrent().catch((e) => setStatus(e.message, true)));
+
+    (async function initInstructionsManager() {
+      if (window.LisaAdminUI?.init) {
+        await window.LisaAdminUI.init({
+          tokenInputId: "instrAdminTokenInput",
+          tokenWrapId: "instrAdminTokenWrap",
+        });
+      }
+      await loadList();
+    })().catch((e) => setStatus(e.message, true));
+  </script>
+</body>
+</html>

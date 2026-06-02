@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ollama vision latency (browser)</title>
+  <style>
+    :root {
+      --bg: #0a0f18;
+      --panel: #121a2b;
+      --text: #e8f0ff;
+      --muted: #8aa0c4;
+      --accent: #45e6ff;
+      --ok: #68ff9b;
+      --warn: #ffdb6e;
+      --err: #ff8a8a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding: 16px;
+      max-width: 920px;
+    }
+    h1 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 0 0 8px 0;
+    }
+    p, .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px 0; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid #243357;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    button {
+      background: #1a2a4a;
+      border: 1px solid #3a5a8a;
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.primary { border-color: var(--accent); color: var(--accent); }
+    #preview {
+      max-width: 100%;
+      width: min(480px, 100%);
+      border-radius: 8px;
+      background: #000;
+      aspect-ratio: 4 / 3;
+      object-fit: contain;
+    }
+    #caption {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
+      margin: 0;
+      min-height: 4em;
+    }
+    #stats { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+    #stats strong { color: var(--ok); }
+    /* ~100 lines visible minimum (scroll inside); lh ≈ one line in this context */
+    #runs {
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 100lh;
+      min-height: calc(100 * 1.45em);
+      max-height: min(85vh, 4000px);
+      overflow: auto;
+      border: 1px solid #243357;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    #runs .run-block {
+      border-left: 2px solid #243357;
+      padding-left: 10px;
+      margin-bottom: 14px;
+    }
+    #runs .run-block:last-child { margin-bottom: 0; }
+    #runs .run-meta { font-family: ui-monospace, monospace; color: var(--muted); }
+    #runs .run-body {
+      margin: 6px 0 0 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    label.inline { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    input[type="range"] { width: 120px; }
+    .err { color: var(--err); }
+  </style>
+</head>
+<body>
+  <h1>Ollama vision latency (standalone test)</h1>
+  <p>
+    <strong>Not the main assistant</strong> — this page is only for the one-off test server. From <code>offline_setup/app</code> run
+    <code>uv run python scripts/ollama_vision_latency_serve.py</code> then open <code>http://127.0.0.1:8765/</code> (default; use <code>--port</code> to change).
+    Your browser sends one webcam frame to <code>/api/vision/preview</code> on that small process; it uses the same <code>vision_caption</code> / Ollama env as the stack. Camera needs a <strong>secure context</strong> (HTTPS, or <code>localhost</code> / <code>127.0.0.1</code>).
+  </p>
+
+  <div class="panel">
+    <div class="row">
+      <button type="button" id="btnCam">Start camera</button>
+      <button type="button" id="btnTest" class="primary" disabled>Capture &amp; request caption</button>
+      <button type="button" id="btnStop" disabled>Stop camera</button>
+    </div>
+    <div class="row">
+      <label class="inline">Max width (px) <input type="number" id="maxW" value="480" min="160" max="1920" style="width:80px;padding:4px 8px;background:#0d162b;border:1px solid #24416b;color:var(--text);border-radius:6px;" /></label>
+      <label class="inline">JPEG quality <input type="range" id="jpegQ" min="50" max="95" value="70" /> <span id="jpegQv">0.70</span></label>
+    </div>
+    <details style="font-size:12px;color:var(--muted);margin-top:8px;">
+      <summary style="cursor:pointer;color:var(--accent);">Latency / “trimmed” captions (server env)</summary>
+      <p style="margin:8px 0 0 0;">
+        This panel shows the <strong>full</strong> caption text returned by the server. If you see a line that stops mid-sentence
+        (“looking at the”, “shoulders/”), that is <strong>not</strong> the browser cutting it — the model hit the
+        <strong>token budget</strong> (<code>VISION_CAPTION_MAX_TOKENS</code>, caps output length). Preamble phrases like
+        “Examine the Image:” use those tokens before the actual scene description.
+      </p>
+      <p style="margin:8px 0 0 0;">
+        A static webcam still produces a <strong>slightly different JPEG</strong> every capture (compression, timing), and default
+        sampling adds variance — so wording and length can change run to run even for the same view.
+      </p>
+      <p style="margin:8px 0 0 0;">
+        For fuller sentences: raise tokens, e.g. <code>export VISION_CAPTION_MAX_TOKENS=768</code> before starting the test server;
+        for steadier text on a fixed scene try <code>VISION_CAPTION_TEMPERATURE=0.2</code>. Lower tokens (e.g. 220) speeds up but cuts mid-sentence more often.
+        For lower latency when captions already come from native Ollama: <code>export VISION_CAPTION_OPENAI_COMPAT=0</code> (one VLM call instead of compat then native).
+        Most delay is still <strong>Ollama</strong> inference. See <code>docs/stack-start-stop.md</code>.
+      </p>
+    </details>
+    <p id="status" class="hint" style="margin-top:10px;">Camera off.</p>
+    <video id="preview" playsinline muted></video>
+  </div>
+
+  <div class="panel">
+    <p id="stats">No run yet.</p>
+    <p id="lastHttp" class="hint"></p>
+    <pre id="caption"></pre>
+  </div>
+
+  <div class="panel">
+    <div class="hint" style="margin-bottom:6px;">Recent runs (newest first)</div>
+    <div id="runs"></div>
+  </div>
+
+  <canvas id="cap" style="display:none;"></canvas>
+
+  <script>
+    const preview = document.getElementById("preview");
+    const cap = document.getElementById("cap");
+    const ctx = cap.getContext("2d");
+    const btnCam = document.getElementById("btnCam");
+    const btnTest = document.getElementById("btnTest");
+    const btnStop = document.getElementById("btnStop");
+    const statusEl = document.getElementById("status");
+    const statsEl = document.getElementById("stats");
+    const lastHttpEl = document.getElementById("lastHttp");
+    const captionEl = document.getElementById("caption");
+    const runsEl = document.getElementById("runs");
+    const maxWEl = document.getElementById("maxW");
+    const jpegQ = document.getElementById("jpegQ");
+    const jpegQv = document.getElementById("jpegQv");
+
+    let stream = null;
+    const runHistory = [];
+    const MAX_RUNS = 20;
+    let sumMs = 0;
+    let nRuns = 0;
+
+    function setStatus(t) {
+      statusEl.textContent = t;
+    }
+
+    function jpegQuality01() {
+      return Math.max(0.01, Math.min(1, parseInt(jpegQ.value, 10) / 100));
+    }
+    jpegQ.addEventListener("input", () => {
+      jpegQv.textContent = jpegQuality01().toFixed(2);
+    });
+    jpegQv.textContent = jpegQuality01().toFixed(2);
+
+    btnCam.addEventListener("click", async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("getUserMedia not available. Use HTTPS or localhost.");
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false,
+        });
+        preview.srcObject = stream;
+        await preview.play().catch(() => {});
+        setStatus("Camera on. When the preview shows your scene, click “Capture & request caption”.");
+        btnTest.disabled = false;
+        btnStop.disabled = false;
+        btnCam.disabled = true;
+      } catch (e) {
+        setStatus("Camera error: " + (e && e.message ? e.message : String(e)));
+      }
+    });
+
+    btnStop.addEventListener("click", () => {
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+      }
+      preview.srcObject = null;
+      setStatus("Camera off.");
+      btnTest.disabled = true;
+      btnStop.disabled = true;
+      btnCam.disabled = false;
+    });
+
+    function frameToJpegBlob() {
+      const vw = preview.videoWidth;
+      const vh = preview.videoHeight;
+      if (!vw || !vh) throw new Error("Video not ready (wait for preview).");
+      let w = vw;
+      let h = vh;
+      const maxW = Math.max(160, Math.min(1920, parseInt(maxWEl.value, 10) || 640));
+      if (w > maxW) {
+        h = Math.round((h * maxW) / w);
+        w = maxW;
+      }
+      cap.width = w;
+      cap.height = h;
+      ctx.drawImage(preview, 0, 0, w, h);
+      return new Promise((resolve, reject) => {
+        cap.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("toBlob failed"));
+          },
+          "image/jpeg",
+          jpegQuality01()
+        );
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function pushRun(entry) {
+      runHistory.unshift(entry);
+      while (runHistory.length > MAX_RUNS) runHistory.pop();
+      runsEl.innerHTML = runHistory
+        .map((r) => {
+          let body = "";
+          if (r.caption != null && r.caption !== "") {
+            body = `<div class="run-body">${escapeHtml(String(r.caption))}</div>`;
+          } else if (r.error != null && r.error !== "") {
+            body = `<div class="run-body err">${escapeHtml(String(r.error))}</div>`;
+          }
+          return `<div class="run-block"><div class="run-meta"><span class="${r.ok ? "" : "err"}">${r.ok ? "OK" : "ERR"}</span> ${r.ms} ms${
+            r.size ? " · " + r.size + " B JPEG" : ""
+          }</div>${body}</div>`;
+        })
+        .join("");
+    }
+
+    btnTest.addEventListener("click", async () => {
+      btnTest.disabled = true;
+      captionEl.textContent = "";
+      lastHttpEl.textContent = "";
+      setStatus("Encoding JPEG…");
+      let blob;
+      try {
+        blob = await frameToJpegBlob();
+      } catch (e) {
+        setStatus("Encode error: " + (e && e.message ? e.message : e));
+        btnTest.disabled = false;
+        return;
+      }
+      const fd = new FormData();
+      fd.append("image", blob, "frame.jpg");
+      setStatus("POST /api/vision/preview …");
+      const t0 = performance.now();
+      let r;
+      try {
+        r = await fetch("/api/vision/preview", { method: "POST", body: fd });
+      } catch (e) {
+        const ms = Math.round(performance.now() - t0);
+        statsEl.innerHTML = `Last: <span class="err">network error</span> (${ms} ms)`;
+        lastHttpEl.textContent = String(e);
+        pushRun({ ok: false, ms, error: String(e) });
+        setStatus("Network error — is the test server running (ollama_vision_latency_serve.py)?");
+        btnTest.disabled = false;
+        return;
+      }
+      const ms = Math.round(performance.now() - t0);
+      const text = await r.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { ok: false, error: "Non-JSON body:\n" + text };
+      }
+      nRuns += 1;
+      sumMs += ms;
+      const mean = Math.round(sumMs / nRuns);
+      if (r.ok && data.ok) {
+        statsEl.innerHTML = `Last: <strong>${ms} ms</strong> (mean of ${nRuns} runs: <strong>${mean} ms</strong>) — browser → test server → Ollama.`;
+        lastHttpEl.textContent = "HTTP " + r.status;
+        captionEl.textContent = data.caption || "(empty caption)";
+        setStatus("Done.");
+        pushRun({ ok: true, ms, size: blob.size, caption: data.caption });
+      } else {
+        statsEl.innerHTML = `Last: <span class="err">${ms} ms</span> — failed`;
+        lastHttpEl.textContent = "HTTP " + r.status + " — " + (data.error || text);
+        captionEl.textContent = data.error || text;
+        setStatus("Caption failed (see body below).");
+        pushRun({ ok: false, ms, error: data.error || text });
+      }
+      btnTest.disabled = false;
+    });
+  </script>
+</body>
+</html>

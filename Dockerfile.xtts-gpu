@@ -1,0 +1,59 @@
+# Coqui XTTS v2 streaming server on GPU using Nemotron's CUDA 13 / Blackwell stack.
+# Use when pre-built ghcr.io/coqui-ai/xtts-streaming-server:cuda121 fails on RTX 5090
+# (e.g. "no kernel image is available for execution on the device").
+#
+# Build: docker build -f Dockerfile.xtts-gpu -t xtts-gpu:blackwell .
+# Run:   docker run -d --name xtts-tts --gpus all -e COQUI_TOS_AGREED=1 -p 8002:80 xtts-gpu:blackwell
+#
+# Requires: nemotron-unified:cuda13 already built.
+
+FROM nemotron-unified:cuda13
+
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
+
+# Coqui TTS (XTTS) from PyPI - Python 3.12 compatible; keep base CUDA 13 torch
+RUN uv pip install --no-cache coqui-tts --no-deps 2>/dev/null || true
+
+# Install Coqui TTS deps (coqpit-config, trainer, etc.); avoid reinstalling torch
+RUN uv pip uninstall -y coqpit 2>/dev/null || true \
+    && uv pip install --no-cache \
+    coqpit-config \
+    coqui-tts-trainer \
+    flask \
+    flask-cors \
+    numpy \
+    scipy \
+    soundfile \
+    transformers \
+    encodec \
+    phonemizer \
+    ko_speech_tools \
+    num2words \
+    anyascii \
+    torchcodec
+
+# Clone XTTS streaming server (exposes /studio_speakers and /tts_stream)
+RUN git clone --depth 1 https://github.com/coqui-ai/xtts-streaming-server.git /app/xtts-server && \
+    cd /app/xtts-server && git config --global --add safe.directory /app/xtts-server
+
+WORKDIR /app/xtts-server
+
+# Patch server/main.py: newer coqui-tts removed get_user_data_dir; provide a local implementation
+RUN sed -i 's/from TTS.utils.generic_utils import get_user_data_dir/def get_user_data_dir(appname): return os.path.join(os.path.expanduser("~"), ".local", "share", appname)/' server/main.py
+
+# Install server/ deps (skip TTS and deepspeed to keep base torch); uvicorn, fastapi, pydantic
+RUN if [ -f server/requirements.txt ]; then grep -v '^TTS ' server/requirements.txt | grep -v '^deepspeed' > /tmp/server_req.txt && uv pip install --no-cache -r /tmp/server_req.txt 2>/dev/null || true; fi
+RUN if [ -f requirements.txt ]; then uv pip install --no-cache -r requirements.txt 2>/dev/null || true; fi
+RUN if [ -f pyproject.toml ]; then uv pip install --no-cache -e . --no-deps 2>/dev/null || true; fi
+
+# PORT: 80 for -p 8002:80; 8002 for --network=host (same binding as Nemotron).
+ENV PORT=80
+EXPOSE 80
+
+# Run uvicorn; bind 0.0.0.0 and use PORT so host network can use PORT=8002.
+RUN printf '%s\n' '#!/bin/bash' 'set -e' 'cd /app/xtts-server' \
+    'exec python -m uvicorn server.main:app --host 0.0.0.0 --port "${PORT:-80}"' \
+    > /app/xtts-server/run.sh && chmod +x /app/xtts-server/run.sh
+
+CMD ["/app/xtts-server/run.sh"]

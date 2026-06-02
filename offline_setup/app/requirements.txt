@@ -1,0 +1,17 @@
+# Extra packages for the host-side bot venv (offline_setup/app).
+# Install after syncing the main project, or when PDF/text attachments need extraction:
+#   cd "$(dirname "$0")/.." && uv pip install -r app/requirements.txt
+#   # or: .venv/bin/pip install -r offline_setup/app/requirements.txt
+#
+pypdf>=5.0,<6
+python-docx>=1.1.2,<2
+openpyxl>=3.1.5,<4
+xlrd>=2.0.1,<3
+python-pptx>=1.0.2,<2
+# Face manager: crop previews from vision JPEGs (optional but recommended)
+Pillow>=10.0,<12
+# Real face bbox detection for face thumbnails (optional, falls back to stub if unavailable)
+opencv-python-headless>=4.10,<5
+# Lisa RAG regression corpus (generate_corpus.py): PDF + legacy Excel writers
+reportlab>=4.0,<5
+xlwt>=1.3,<2

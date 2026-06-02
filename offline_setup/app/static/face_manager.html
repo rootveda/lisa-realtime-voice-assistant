@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <title>Face Registry & Session Focus</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      background: #070b14;
+      color: #dff6ff;
+      line-height: 1.45;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      color: #45e6ff;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .page-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .page-toolbar a.nav-link {
+      display: inline-block;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: #45e6ff;
+      background: #0f1c34;
+      border: 1px solid #355a8a;
+      border-radius: 8px;
+    }
+    .page-toolbar a.nav-link:hover { border-color: #45e6ff; }
+    .stack { display: grid; gap: 12px; min-width: 0; }
+    .panel {
+      border: 1px solid #243357;
+      border-radius: 10px;
+      background: #0b1426;
+      overflow: hidden;
+    }
+    .panel > h2,
+    .panel > .panel-head {
+      margin: 0;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #45e6ff;
+      border-bottom: 1px solid #243357;
+      background: #101b32;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .panel-body { padding: 12px; }
+    .panel-body > .sub:last-child,
+    .panel-body > .muted:last-child { margin-bottom: 0; }
+    .sub, .muted { color: #8cb8c7; font-size: 12px; margin: 0 0 10px; line-height: 1.45; }
+    label { display: block; font-size: 12px; color: #8cb8c7; margin-bottom: 4px; }
+    input[type="text"], select, textarea, input[type="file"] {
+      width: 100%;
+      max-width: 520px;
+      background: #0d162b;
+      color: #dff6ff;
+      border: 1px solid #24416b;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 12px;
+    }
+    input[type="file"] { max-width: 100%; padding: 6px 8px; }
+    textarea { min-height: 72px; resize: vertical; font-family: inherit; }
+    button {
+      cursor: pointer;
+      background: #0d162b;
+      color: #dff6ff;
+      border: 1px solid #24416b;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 12px;
+    }
+    button.primary {
+      border-color: #355a8a;
+      background: #0f1c34;
+      color: #45e6ff;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    button.danger {
+      border-color: #7d3f3f;
+      background: #2a1313;
+      color: #ff9e9e;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
+    .row > div { flex: 1; min-width: 160px; }
+    .pill {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      margin-right: 8px;
+      border: 1px solid #24416b;
+    }
+    .pill.on { background: #0f1f18; color: #68ff9b; border-color: #2a6b4a; }
+    .pill.off { background: #241010; color: #ffb0b0; border-color: #8b3232; }
+    table { width: 100%; border-collapse: collapse; border: 1px solid #243357; border-radius: 8px; overflow: hidden; font-size: 12px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #243357; vertical-align: top; }
+    th { color: #45e6ff; background: #101b32; font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    .table-wrap { overflow-x: auto; margin-bottom: 12px; }
+    .subsection-title {
+      margin: 14px 0 8px;
+      font-size: 12px;
+      color: #45e6ff;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .subsection-title:first-child { margin-top: 0; }
+    .err { color: #ff9e9e; font-size: 12px; margin-top: 8px; }
+    .okmsg { color: #68ff9b; font-size: 12px; margin-top: 8px; }
+    .chk-inline { font-size: 12px; color: #8cb8c7; display: block; margin-top: 8px; }
+    pre.ctx {
+      background: #0d162b;
+      border: 1px solid #243357;
+      border-radius: 8px;
+      padding: 10px 12px;
+      overflow: auto;
+      font-size: 11px;
+      max-height: 220px;
+      margin: 0;
+      color: #8cb8c7;
+    }
+    a { color: #45e6ff; }
+    code { font-family: ui-monospace, monospace; font-size: 11px; }
+    .no-thumb {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 8px;
+      border: 1px dashed #24416b;
+      color: #8cb8c7;
+      font-size: 10px;
+      text-align: center;
+      padding: 4px;
+      line-height: 1.15;
+    }
+    .cam-wrap {
+      border: 1px solid #243357;
+      border-radius: 10px;
+      background: #0d162b;
+      padding: 10px;
+      max-width: 560px;
+    }
+    #camPreview {
+      width: 100%;
+      max-width: 520px;
+      background: #070b14;
+      border: 1px solid #243357;
+      border-radius: 8px;
+      min-height: 180px;
+      aspect-ratio: 16/9;
+    }
+    .divider { border: 0; border-top: 1px solid #243357; margin: 14px 0; }
+    #fileProtoBanner {
+      display: none;
+      background: #241010;
+      border: 1px solid #8b3232;
+      padding: 12px 14px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #ffb0b0;
+    }
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      background: rgba(2, 8, 20, 0.72);
+      padding: 16px;
+    }
+    .modal-backdrop.is-open { display: flex; }
+    .modal-dialog {
+      background: #0b1426;
+      border: 1px solid #243357;
+      border-radius: 12px;
+      padding: 16px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 0 24px rgba(69, 230, 255, 0.12);
+    }
+    .modal-dialog h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: #45e6ff;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .modal-body {
+      margin: 0 0 14px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #8cb8c7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #pageToast {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      max-width: min(520px, 92vw);
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.4;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+      cursor: pointer;
+    }
+    #pageToast.toast-err {
+      background: #241010;
+      border: 1px solid #8b3232;
+      color: #ffb0b0;
+    }
+    #pageToast.toast-ok {
+      background: #0f1f18;
+      border: 1px solid #2a6b4a;
+      color: #a8e6c3;
+    }
+    #pageToast.toast-info {
+      background: #0f1c34;
+      border: 1px solid #355a8a;
+      color: #dff6ff;
+    }
+    #faceAdminTokenWrap input { max-width: none; font-family: ui-monospace, monospace; }
+    details > summary { cursor: pointer; list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+  </style>
+</head>
+<body>
+  <div id="modalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h3 id="modalTitle">Confirm</h3>
+      <div id="modalBody" class="modal-body"></div>
+      <div class="modal-actions">
+        <button type="button" id="modalCancel">Cancel</button>
+        <button type="button" class="danger" id="modalConfirm">OK</button>
+      </div>
+    </div>
+  </div>
+  <div id="pageToast" role="status" aria-live="polite"></div>
+
+  <div id="fileProtoBanner">
+    <strong>Wrong URL.</strong> Open Face Manager from the running bot, e.g.
+    <code>https://127.0.0.1:7860/face-manager</code> (same host/port as the Assistant Console).
+    Opening this HTML as a <code>file://</code> page disables API calls.
+  </div>
+
+  <h1>Face Registry &amp; Session Focus</h1>
+  <div class="page-toolbar">
+    <a class="nav-link" href="/user-guide">Operator Guide</a>
+    <a class="nav-link" href="/assistant-console">Open Assistant</a>
+    <button type="button" id="btnRefresh">Refresh status</button>
+  </div>
+
+  <div class="lisa-page-layout">
+    <aside class="lisa-side-panel" data-lisa-security-panel>
+      <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite" style="margin-top:0;">Checking security mode…</div>
+      <label id="faceAdminTokenWrap" class="muted" data-lisa-admin-token-wrap style="display:none;margin-top:12px;">
+        Admin token (mutations in admin mode)
+        <input type="password" id="faceAdminTokenInput" data-lisa-admin-token data-lisa-admin-token-focus autocomplete="off" placeholder="Paste LISA_ADMIN_TOKEN" style="width:100%;margin-top:4px;" />
+      </label>
+      <p class="muted" style="margin-top:12px;margin-bottom:0;">
+        Enable the server face pipeline, rename <code>unknown_*</code> identities, and control
+        <strong>auto</strong> / <strong>multiface</strong> / <strong>pinned person</strong> for a live
+        <code>vision_session_id</code>.
+      </p>
+      <p class="muted" id="uiBuildStamp" style="margin-top:10px;margin-bottom:0;font-size:11px;">
+        In-page dialogs only — hard-refresh (Ctrl+Shift+R) if you still see browser pop-ups.
+      </p>
+    </aside>
+
+    <main class="stack">
+
+  <div class="panel">
+    <h2>Server face recognition</h2>
+    <div class="panel-body">
+    <p id="runtimeStatus" class="muted">Loading…</p>
+    <div class="row">
+      <button type="button" class="primary" id="btnEnable">Turn ON (persisted)</button>
+      <button type="button" id="btnDisable">Turn OFF</button>
+    </div>
+    <p class="sub">
+      <strong>Env</strong> <code>FACERECOG_ENABLED=1</code> also enables the pipeline. Runtime toggle writes
+      <code>rag_data/facerecog_runtime.json</code> so JPEG analysis and voice face mode work after restart.
+    </p>
+    <div id="runtimeErr" class="err" style="display:none;"></div>
+    <div class="row">
+      <div>
+        <label for="pendingMinConf">Pending min confidence (0..1)</label>
+        <input type="text" id="pendingMinConf" value="0.62" style="max-width:180px;" />
+      </div>
+      <div>
+        <label for="pendingMinArea">Pending min bbox area (0..1)</label>
+        <input type="text" id="pendingMinArea" value="0.035" style="max-width:180px;" />
+      </div>
+      <button type="button" id="btnPendingQualityRefresh">Load quality</button>
+      <button type="button" class="primary" id="btnPendingQualitySave">Save quality</button>
+      <button type="button" id="btnPendingQualityReset">Reset defaults</button>
+    </div>
+    <p class="sub" style="margin-bottom:0;">
+      Filters low-quality unknown detections before adding to Pending. Higher values = stricter.
+    </p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Camera capture &amp; enroll assist</h2>
+    <div class="panel-body">
+    <p class="sub">
+      Start camera to stream JPEG frames to this vision session. Face pipeline will create/update pending
+      <code>stub_vs_*</code> ids; then use <strong>Use for enroll</strong> and save a display name below.
+    </p>
+    <div class="row">
+      <button type="button" class="primary" id="btnCamStart">Start camera</button>
+      <button type="button" class="primary" id="btnCamCapture">Capture and move to pending</button>
+      <button type="button" id="btnCamStop">Stop camera</button>
+    </div>
+    <div class="cam-wrap">
+      <video id="camPreview" autoplay playsinline muted></video>
+      <canvas id="camCapture" width="480" height="270" style="display:none;"></canvas>
+      <p id="camStatus" class="muted" style="margin:8px 0 0 0;">Camera idle.</p>
+    </div>
+    <div id="camErr" class="err" style="display:none;"></div>
+    <hr class="divider" />
+    <h3 class="subsection-title">Extract from picture files</h3>
+    <p class="sub">
+      Browse one or more image files. Detected faces that are not already enrolled will be added to Pending.
+    </p>
+    <div class="row">
+      <input type="file" id="faceExtractFiles" accept="image/*" multiple />
+      <button type="button" class="primary" id="btnExtractFaces">Extract faces to pending</button>
+    </div>
+    <div id="extractErr" class="err" style="display:none;margin-bottom:0;"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Advanced: vision session focus</h2>
+    <div class="panel-body">
+    <details>
+      <summary class="sub" style="margin-bottom:10px;">Show advanced session/focus controls</summary>
+      <p class="sub">
+        Paste the active session id (stored in this browser as <code>assistantConsole.lastVisionSessionId.v1</code> when you start voice with camera).
+      </p>
+      <div class="row">
+        <div style="flex:1;min-width:220px;">
+          <label for="visionSid">vision_session_id</label>
+          <input type="text" id="visionSid" placeholder="uuid" autocomplete="off" />
+        </div>
+        <button type="button" class="primary" id="btnPaste">Paste from storage</button>
+        <button type="button" id="btnLoadSession">Load session state</button>
+      </div>
+      <div class="row">
+        <div style="flex:1;min-width:180px;">
+          <label for="focusMode">Mode</label>
+          <select id="focusMode">
+            <option value="auto">Auto (follow detector primary)</option>
+            <option value="multiface">Multiface (shared context, log to all visible)</option>
+            <option value="person">Pin person</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:180px;">
+          <label for="focusPerson">person_id (for pin mode)</label>
+          <input type="text" id="focusPerson" placeholder="unknown_… or enrolled id" />
+        </div>
+        <label class="chk-inline"><input type="checkbox" id="chkForceFocus" /> Force override (when Voice+Video+Face locked policy)</label>
+        <button type="button" class="primary" id="btnApplyFocus">Apply focus</button>
+      </div>
+      <pre class="ctx" id="sessionDump">{}</pre>
+      <div id="focusErr" class="err" style="display:none;margin-bottom:0;"></div>
+    </details>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Recognized people</h2>
+    <div class="panel-body">
+    <p class="sub">
+      Stable camera stub ids look like <code>stub_vs_*</code> — derived from <code>vision_session_id</code>.
+      The Assistant Console <strong>reuses</strong> the same vision session across voice reconnects.
+      <strong>Preview</strong> needs <code>Pillow</code> on the server and camera + face JPEGs.
+    </p>
+    <div id="personsErr" class="err" style="display:none;"></div>
+    <h3 class="subsection-title">Named (enrolled)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Preview</th><th>person_id</th><th>display_name</th><th>kind</th><th>actions</th></tr>
+        </thead>
+        <tbody id="recognizedBody"></tbody>
+      </table>
+    </div>
+    <h3 class="subsection-title">Pending stub (not renamed yet)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Preview</th><th>person_id</th><th>display_name</th><th>actions</th></tr>
+        </thead>
+        <tbody id="stubPendingBody"></tbody>
+      </table>
+    </div>
+    <p class="sub"><label><input type="checkbox" id="chkLegacyUnknown" /> Show legacy per-frame <code>unknown_[12 hex]</code> rows</label>
+      <span id="legacyMeta" class="muted"></span></p>
+    <div class="table-wrap" style="display:none;" id="legacyWrap">
+      <table>
+        <thead>
+          <tr><th>Preview</th><th>person_id</th><th>display_name</th><th>actions</th></tr>
+        </thead>
+        <tbody id="legacyBody"></tbody>
+      </table>
+    </div>
+    <h3 class="subsection-title">Enroll / rename</h3>
+    <p class="sub">Optional: set active <code>vision_session_id</code> above — saving switches focus to this person for that session.</p>
+    <div class="row">
+      <div><label>person_id</label><input type="text" id="enrollId" placeholder="stub_vs_… from Pending or your id" /></div>
+      <div><label>display_name</label><input type="text" id="enrollName" placeholder="Alice" /></div>
+    </div>
+    <label>notes (optional)</label>
+    <textarea id="enrollNotes"></textarea>
+    <button type="button" class="primary" id="btnEnroll">Save person</button>
+    <div id="enrollMsg" class="okmsg" style="display:none;"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Turn log (per person)</h2>
+    <div class="panel-body">
+    <div class="row">
+      <div style="flex:1;">
+        <label for="turnsPid">person_id</label>
+        <input type="text" id="turnsPid" placeholder="select from table or type" />
+      </div>
+      <button type="button" id="btnLoadTurns">Load recent turns</button>
+    </div>
+    <pre class="ctx" id="turnsDump">[]</pre>
+    </div>
+  </div>
+
+    </main>
+  </div>
+
+  <script src="/lisa-admin-ui.js"></script>
+  <script>
+    function el(id) {
+      return document.getElementById(id);
+    }
+
+    async function faceApiFetch(url, options = {}) {
+      const opts = { ...options };
+      const headers = { ...(opts.headers || {}) };
+      if (typeof window.LisaAdminUI === "object" && typeof window.LisaAdminUI.adminHeaders === "function") {
+        Object.assign(headers, window.LisaAdminUI.adminHeaders(headers));
+      }
+      opts.headers = headers;
+      const res = await fetch(url, opts);
+      if (typeof window.LisaAdminUI === "object" && typeof window.LisaAdminUI.checkAuthResponse === "function") {
+        let data = null;
+        try {
+          data = await res.clone().json();
+        } catch (_) {}
+        if (await window.LisaAdminUI.checkAuthResponse(res, data, "Face manager")) {
+          throw new Error("Admin token required — paste LISA_ADMIN_TOKEN in the sidebar.");
+        }
+      }
+      return res;
+    }
+
+    async function faceMutatingFetch(url, options = {}, actionLabel = "This action") {
+      if (typeof window.LisaAdminUI === "object" && typeof window.LisaAdminUI.ensureAdminToken === "function") {
+        if (!(await window.LisaAdminUI.ensureAdminToken(actionLabel))) {
+          throw new Error("Admin token required.");
+        }
+        window.LisaAdminUI.persistToken();
+      }
+      return faceApiFetch(url, options);
+    }
+
+    let _confirmResolve = null;
+    let camStream = null;
+    let camFrameId = 0;
+    let latestPendingPersonIds = [];
+
+    function showToast(msg, kind) {
+      const t = el("pageToast");
+      const k = kind === "ok" ? "ok" : kind === "err" ? "err" : "info";
+      t.className = "toast-" + k;
+      t.textContent = msg;
+      t.style.display = "block";
+      t.title = "Click to dismiss";
+      t.onclick = () => {
+        t.style.display = "none";
+        clearTimeout(t._hideTid);
+      };
+      clearTimeout(t._hideTid);
+      t._hideTid = setTimeout(() => {
+        t.style.display = "none";
+      }, 10000);
+    }
+
+    function formatApiErrorBody(text) {
+      try {
+        const j = JSON.parse(text);
+        return typeof j.detail === "string" ? j.detail : text;
+      } catch (_) {
+        return text;
+      }
+    }
+
+    function openConfirmModal(title, bodyText, confirmLabel) {
+      return new Promise((resolve) => {
+        _confirmResolve = resolve;
+        el("modalTitle").textContent = title;
+        el("modalBody").textContent = bodyText;
+        el("modalConfirm").textContent = confirmLabel || "OK";
+        const bd = el("modalBackdrop");
+        bd.classList.add("is-open");
+        bd.setAttribute("aria-hidden", "false");
+        el("modalConfirm").focus();
+      });
+    }
+
+    function closeConfirmModal(value) {
+      const bd = el("modalBackdrop");
+      bd.classList.remove("is-open");
+      bd.setAttribute("aria-hidden", "true");
+      const fn = _confirmResolve;
+      _confirmResolve = null;
+      if (fn) fn(!!value);
+    }
+
+    function wirePageModal() {
+      el("modalCancel").onclick = () => closeConfirmModal(false);
+      el("modalConfirm").onclick = () => closeConfirmModal(true);
+      el("modalBackdrop").onclick = (ev) => {
+        if (ev.target === el("modalBackdrop")) closeConfirmModal(false);
+      };
+      document.addEventListener("keydown", (ev) => {
+        if (!el("modalBackdrop").classList.contains("is-open")) return;
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          closeConfirmModal(false);
+        }
+      });
+    }
+
+    function previewTd(p) {
+      const rawId = p.person_id || "";
+      const pid = String(rawId).replace(/</g, "");
+      if (p.has_thumbnail) {
+        const src =
+          "/api/face/person/" +
+          encodeURIComponent(rawId) +
+          "/thumbnail?t=" +
+          Date.now();
+        return (
+          `<td><img alt="" width="56" height="56" style="object-fit:cover;border-radius:8px;border:1px solid #243357" src="${src}" loading="lazy" /></td>`
+        );
+      }
+      return `<td><span class="no-thumb">No snapshot yet — enable camera + face, send JPEGs</span></td>`;
+    }
+
+    function setCamStatus(msg) {
+      el("camStatus").textContent = msg;
+    }
+
+    function stopCameraStream() {
+      if (camStream) {
+        for (const t of camStream.getTracks()) t.stop();
+        camStream = null;
+      }
+      const v = el("camPreview");
+      if (v) v.srcObject = null;
+      setCamStatus("Camera idle.");
+    }
+
+    async function startCameraStream() {
+      el("camErr").style.display = "none";
+      stopCameraStream();
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        const vid = el("camPreview");
+        vid.srcObject = camStream;
+        await vid.play().catch(() => {});
+        await new Promise((resolve) => {
+          if (vid.videoWidth > 0) return resolve();
+          const done = () => resolve();
+          vid.addEventListener("loadeddata", done, { once: true });
+          vid.addEventListener("playing", done, { once: true });
+          setTimeout(done, 3000);
+        });
+        setCamStatus("Camera ready. Click “Capture and move to pending”.");
+      } catch (e) {
+        el("camErr").textContent = String(e);
+        el("camErr").style.display = "block";
+        stopCameraStream();
+      }
+    }
+
+    async function captureAndMoveToPending() {
+      el("camErr").style.display = "none";
+      try {
+        if (!camStream) {
+          await startCameraStream();
+        }
+        try {
+          const runtimeResp = await faceMutatingFetch("/api/face/runtime", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: true }),
+          }, "Enable face recognition");
+          if (!runtimeResp.ok) {
+            const raw = await runtimeResp.text();
+            throw new Error("Cannot enable face runtime: " + (formatApiErrorBody(raw) || `HTTP ${runtimeResp.status}`));
+          }
+        } catch (e) {
+          throw new Error(String(e) || "Cannot enable face runtime.");
+        }
+        const sid = crypto.randomUUID();
+        el("visionSid").value = sid;
+        const vid = el("camPreview");
+        const can = el("camCapture");
+        const c2d = can.getContext("2d");
+        if (!vid.videoWidth) {
+          throw new Error("Camera frame not ready yet. Try again.");
+        }
+        const w = Math.min(480, vid.videoWidth);
+        const h = Math.round((vid.videoHeight * w) / vid.videoWidth);
+        can.width = w;
+        can.height = h;
+        c2d.drawImage(vid, 0, 0, w, h);
+        const captureJpeg = async () => {
+          c2d.drawImage(vid, 0, 0, w, h);
+          const blob = await new Promise((resolve) => can.toBlob(resolve, "image/jpeg", 0.80));
+          if (!blob) throw new Error("Failed to capture JPEG.");
+          return blob;
+        };
+        // Deterministic capture API: one frame in, server returns detected ids.
+        const blob = await captureJpeg();
+        const fd = new FormData();
+        fd.append("vision_session_id", sid);
+        fd.append("image", blob, `face_capture_${camFrameId++}.jpg`);
+        const resp = await faceMutatingFetch("/api/face/capture", { method: "POST", body: fd }, "Capture face");
+        let payload = {};
+        try {
+          payload = await resp.json();
+        } catch (_) {}
+        if (!resp.ok) {
+          const msg = payload?.detail || payload?.error || `HTTP ${resp.status}`;
+          throw new Error(String(msg));
+        }
+        await new Promise((r) => setTimeout(r, 250));
+        await loadPersons();
+        setCamStatus(`Captured one frame (session ${sid.slice(0, 8)}…).`);
+        const detectedCount = Number(payload?.detected_count ?? 0);
+        const pendingIds = Array.isArray(payload?.pending_detected_person_ids)
+          ? payload.pending_detected_person_ids.filter((x) => !!x)
+          : [];
+        const recognizedIds = Array.isArray(payload?.recognized_detected_person_ids)
+          ? payload.recognized_detected_person_ids.filter((x) => !!x)
+          : [];
+        const insertedCount = Number(payload?.inserted_count ?? 0);
+        const skippedLowQuality = Number(payload?.skipped_low_quality_count ?? 0);
+        if (detectedCount <= 0) {
+          showToast("Capture succeeded but detected 0 faces. Reposition and try again.", "info");
+        } else if (pendingIds.length > 0) {
+          showToast(
+            `Detected ${detectedCount} face(s). Pending matched: ${pendingIds.length}. New pending added: ${insertedCount}.`,
+            "ok",
+          );
+        } else if (recognizedIds.length > 0) {
+          showToast(
+            `Detected ${detectedCount} face(s). Recognized enrolled: ${recognizedIds.length}. Check recognized table.`,
+            "ok",
+          );
+        } else {
+          showToast(`Detected ${detectedCount} face(s), but none classified as pending.`, "info");
+        }
+        if (skippedLowQuality > 0) {
+          showToast(`Skipped ${skippedLowQuality} low-quality detection(s) for pending safety.`, "info");
+        }
+      } catch (e) {
+        el("camErr").textContent = String(e);
+        el("camErr").style.display = "block";
+      }
+    }
+
+    async function extractFacesFromUploads() {
+      el("extractErr").style.display = "none";
+      const input = el("faceExtractFiles");
+      const files = input?.files;
+      if (!files || !files.length) {
+        showToast("Choose one or more picture files first.", "info");
+        return;
+      }
+      try {
+        const runtimeResp = await faceMutatingFetch("/api/face/runtime", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: true }),
+        }, "Enable face recognition");
+        if (!runtimeResp.ok) {
+          const raw = await runtimeResp.text();
+          throw new Error("Cannot enable face runtime: " + (formatApiErrorBody(raw) || `HTTP ${runtimeResp.status}`));
+        }
+        const sid = (el("visionSid").value || "").trim() || crypto.randomUUID();
+        const fd = new FormData();
+        fd.append("vision_session_id", sid);
+        for (const f of files) fd.append("images", f, f.name || "upload.jpg");
+        const resp = await faceMutatingFetch("/api/face/extract-upload", { method: "POST", body: fd }, "Extract faces");
+        let payload = {};
+        try {
+          payload = await resp.json();
+        } catch (_) {}
+        if (!resp.ok) {
+          const msg = payload?.detail || payload?.error || `HTTP ${resp.status}`;
+          throw new Error(String(msg));
+        }
+        input.value = "";
+        await loadPersons();
+        const detected = Number(payload?.detected_count ?? 0);
+        const inserted = Number(payload?.inserted_count ?? 0);
+        const skippedLowQuality = Number(payload?.skipped_low_quality_count ?? 0);
+        const processed = Number(payload?.files_processed ?? 0);
+        const failed = Number(payload?.files_failed ?? 0);
+        if (inserted > 0) {
+          showToast(
+            `Processed ${processed} file(s): detected ${detected} face(s), added ${inserted} new pending identity(ies).`,
+            "ok",
+          );
+        } else {
+          showToast(
+            `Processed ${processed} file(s): detected ${detected} face(s), no new pending identities (already enrolled or already known).`,
+            failed > 0 ? "info" : "ok",
+          );
+        }
+        if (failed > 0) {
+          const firstErr = Array.isArray(payload?.failed) && payload.failed.length ? payload.failed[0]?.error || "" : "";
+          showToast(`Some files failed (${failed}). ${firstErr}`, "err");
+        }
+        if (skippedLowQuality > 0) {
+          showToast(`Skipped ${skippedLowQuality} low-quality detection(s) for pending safety.`, "info");
+        }
+      } catch (e) {
+        el("extractErr").textContent = String(e);
+        el("extractErr").style.display = "block";
+      }
+    }
+
+    async function fetchTurnsDump(rawPid) {
+      const pid = (rawPid || "").trim();
+      if (!pid) return;
+      el("turnsPid").value = pid;
+      try {
+        const r = await fetch("/api/face/person/" + encodeURIComponent(pid) + "/turns?limit=40");
+        if (!r.ok) {
+          el("turnsDump").textContent = await r.text();
+          return;
+        }
+        const d = await r.json();
+        el("turnsDump").textContent = JSON.stringify(d.turns || [], null, 2);
+      } catch (e) {
+        el("turnsDump").textContent = String(e);
+      }
+    }
+
+    async function refreshRuntime() {
+      el("runtimeErr").style.display = "none";
+      try {
+        const r = await fetch("/api/face/runtime", { cache: "no-store" });
+        const d = await r.json();
+        const eff = d.effective_enabled;
+        el("runtimeStatus").innerHTML =
+          `<span class="pill ${eff ? "on" : "off"}">${eff ? "Effective: ON" : "Effective: OFF"}</span>` +
+          ` env=<code>${!!d.env_enabled}</code> runtime=<code>${!!d.runtime_enabled}</code>`;
+      } catch (e) {
+        el("runtimeErr").textContent = String(e);
+        el("runtimeErr").style.display = "block";
+      }
+    }
+
+    async function refreshPendingQuality() {
+      el("runtimeErr").style.display = "none";
+      try {
+        const r = await fetch("/api/face/pending-quality", { cache: "no-store" });
+        if (!r.ok) throw new Error(await r.text());
+        const d = await r.json();
+        el("pendingMinConf").value = String(d.pending_min_conf ?? 0.62);
+        el("pendingMinArea").value = String(d.pending_min_bbox_area ?? 0.035);
+      } catch (e) {
+        el("runtimeErr").textContent = String(e);
+        el("runtimeErr").style.display = "block";
+      }
+    }
+
+    async function savePendingQuality() {
+      el("runtimeErr").style.display = "none";
+      const c = parseFloat((el("pendingMinConf").value || "").trim());
+      const a = parseFloat((el("pendingMinArea").value || "").trim());
+      if (!Number.isFinite(c) || !Number.isFinite(a)) {
+        showToast("Quality thresholds must be numbers.", "err");
+        return;
+      }
+      try {
+        const r = await faceMutatingFetch("/api/face/pending-quality", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pending_min_conf: c,
+            pending_min_bbox_area: a,
+          }),
+        }, "Save pending quality");
+        if (!r.ok) throw new Error(await r.text());
+        const d = await r.json();
+        el("pendingMinConf").value = String(d.pending_min_conf ?? c);
+        el("pendingMinArea").value = String(d.pending_min_bbox_area ?? a);
+        showToast("Pending quality thresholds saved.", "ok");
+      } catch (e) {
+        el("runtimeErr").textContent = String(e);
+        el("runtimeErr").style.display = "block";
+      }
+    }
+
+    async function resetPendingQualityDefaults() {
+      el("pendingMinConf").value = "0.62";
+      el("pendingMinArea").value = "0.035";
+      await savePendingQuality();
+    }
+
+    function bindDelTurns(tbodyId) {
+      const tbody = el(tbodyId);
+      if (!tbody) return;
+      tbody.querySelectorAll(".btn-del").forEach((b) => {
+        b.onclick = async () => {
+          const id = b.getAttribute("data-del");
+          if (b.disabled) return;
+          const stubHint =
+            id && id.startsWith("stub_vs_")
+              ? "\n\nNote: if the camera is still streaming, this identity may reappear on the next analyzed frame."
+              : "";
+          const ok = await openConfirmModal(
+            "Delete person?",
+            "Delete " + id + " and all conversation turns?" + stubHint,
+            "Delete",
+          );
+          if (!ok) return;
+          const res = await faceMutatingFetch("/api/face/person/" + encodeURIComponent(id), { method: "DELETE" }, "Delete person");
+          if (!res.ok) {
+            const raw = await res.text();
+            let msg = formatApiErrorBody(raw);
+            if (res.status === 404) {
+              msg =
+                "Face API disabled (404). Use “Turn ON (persisted)” above, then try delete again. " +
+                (msg || "");
+            }
+            showToast(msg, "err");
+            return;
+          }
+          showToast("Deleted " + id + ".", "ok");
+          await loadPersons();
+        };
+      });
+      tbody.querySelectorAll(".btn-turns").forEach((b) => {
+        b.onclick = () => fetchTurnsDump(b.getAttribute("data-turns"));
+      });
+      tbody.querySelectorAll(".btn-enroll").forEach((b) => {
+        b.onclick = () => {
+          const pid = b.getAttribute("data-enroll") || "";
+          if (!pid) return;
+          el("enrollId").value = pid;
+          el("enrollName").focus();
+          showToast("Selected person_id for enroll: " + pid, "info");
+        };
+      });
+    }
+
+    async function loadPersons() {
+      el("personsErr").style.display = "none";
+      el("recognizedBody").innerHTML = "";
+      el("stubPendingBody").innerHTML = "";
+      el("legacyBody").innerHTML = "";
+      const legacy = el("chkLegacyUnknown").checked;
+      try {
+        const q = "?include_legacy_unknown=true";
+        const r = await fetch("/api/face/persons" + q, { cache: "no-store" });
+        if (r.status === 404) {
+          el("personsErr").textContent =
+            "Face API unavailable (404). Enable face recognition above, or restart the bot so /api/face routes load.";
+          el("personsErr").style.display = "block";
+          return;
+        }
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        latestPendingPersonIds = (data.stub_pending || [])
+          .map((p) => String(p?.person_id || "").trim())
+          .filter((x) => !!x);
+        el("legacyMeta").textContent =
+          " filtered legacy rows: " + (data.legacy_unknown_filtered_count ?? 0);
+        const rec = data.recognized || [];
+        for (const p of rec) {
+          const tr = document.createElement("tr");
+          const pid = (p.person_id || "").replace(/</g, "");
+          const dn = (p.display_name || "").replace(/</g, "");
+          const kind = (p.kind || "").replace(/</g, "");
+          tr.innerHTML =
+            previewTd(p) +
+            `<td><code>${pid}</code></td><td>${dn}</td><td>${kind}</td><td>
+            <button type="button" data-enroll="${pid}" class="btn-enroll">Use for enroll</button>
+            <button type="button" data-del="${pid}" class="danger btn-del" title="Removes DB row; camera may recreate stub_vs_* on next frame">Delete</button>
+            <button type="button" data-turns="${pid}" class="btn-turns">Turns</button>
+          </td>`;
+          el("recognizedBody").appendChild(tr);
+        }
+        const pend = data.stub_pending || [];
+        for (const p of pend) {
+          const tr = document.createElement("tr");
+          const pid = (p.person_id || "").replace(/</g, "");
+          const dn = (p.display_name || "").replace(/</g, "");
+          tr.innerHTML =
+            previewTd(p) +
+            `<td><code>${pid}</code></td><td>${dn}</td><td>
+            <button type="button" data-enroll="${pid}" class="btn-enroll">Use for enroll</button>
+            <button type="button" data-del="${pid}" class="danger btn-del" title="Removes DB row; next JPEG may recreate this stub">Delete</button>
+            <button type="button" data-turns="${pid}" class="btn-turns">Turns</button>
+          </td>`;
+          el("stubPendingBody").appendChild(tr);
+        }
+        if (legacy) {
+          el("legacyWrap").style.display = "block";
+          const all = data.persons || [];
+          for (const p of all) {
+            if ((p.kind || "") !== "legacy_unknown_hash") continue;
+            const tr = document.createElement("tr");
+            const pid = (p.person_id || "").replace(/</g, "");
+            const dn = (p.display_name || "").replace(/</g, "");
+            tr.innerHTML =
+              previewTd(p) +
+              `<td><code>${pid}</code></td><td>${dn}</td><td>
+              <button type="button" data-enroll="${pid}" class="btn-enroll">Use for enroll</button>
+              <button type="button" data-del="${pid}" class="danger btn-del">Delete</button>
+              <button type="button" data-turns="${pid}" class="btn-turns">Turns</button>
+            </td>`;
+            el("legacyBody").appendChild(tr);
+          }
+        } else {
+          el("legacyWrap").style.display = "none";
+        }
+        bindDelTurns("recognizedBody");
+        bindDelTurns("stubPendingBody");
+        bindDelTurns("legacyBody");
+      } catch (e) {
+        el("personsErr").textContent = String(e);
+        el("personsErr").style.display = "block";
+      }
+    }
+
+    function initFaceManager() {
+      if (typeof window.LisaAdminUI === "object" && typeof window.LisaAdminUI.init === "function") {
+        window.LisaAdminUI.init({ tokenInputId: "faceAdminTokenInput", tokenWrapId: "faceAdminTokenWrap" });
+      }
+      wirePageModal();
+
+      if (location.protocol === "file:") {
+        const b = el("fileProtoBanner");
+        if (b) b.style.display = "block";
+      }
+
+      el("btnRefresh").onclick = () => refreshRuntime();
+      el("btnPendingQualityRefresh").onclick = () => refreshPendingQuality();
+      el("btnPendingQualitySave").onclick = () => savePendingQuality();
+      el("btnPendingQualityReset").onclick = () => resetPendingQualityDefaults();
+      el("btnCamStart").onclick = () => startCameraStream();
+      el("btnCamCapture").onclick = () => captureAndMoveToPending();
+      el("btnCamStop").onclick = () => stopCameraStream();
+      el("btnExtractFaces").onclick = () => extractFacesFromUploads();
+      el("btnEnable").onclick = async () => {
+        el("runtimeErr").style.display = "none";
+        try {
+          const r = await faceMutatingFetch("/api/face/runtime", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: true }),
+          }, "Turn face recognition ON");
+          if (!r.ok) throw new Error(await r.text());
+          await refreshRuntime();
+          await loadPersons();
+        } catch (e) {
+          el("runtimeErr").textContent = String(e);
+          el("runtimeErr").style.display = "block";
+        }
+      };
+      el("btnDisable").onclick = async () => {
+        el("runtimeErr").style.display = "none";
+        try {
+          const r = await faceMutatingFetch("/api/face/runtime", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: false }),
+          }, "Turn face recognition OFF");
+          if (!r.ok) throw new Error(await r.text());
+          await refreshRuntime();
+        } catch (e) {
+          el("runtimeErr").textContent = String(e);
+          el("runtimeErr").style.display = "block";
+        }
+      };
+
+      el("chkLegacyUnknown").onchange = () => loadPersons();
+
+      el("btnPaste").onclick = () => {
+        try {
+          const v = localStorage.getItem("assistantConsole.lastVisionSessionId.v1") || "";
+          el("visionSid").value = v.trim();
+        } catch (_) {}
+      };
+
+      el("btnLoadSession").onclick = async () => {
+        el("focusErr").style.display = "none";
+        const sid = el("visionSid").value.trim();
+        if (!sid) return;
+        try {
+          const r = await fetch("/api/face/session/" + encodeURIComponent(sid), { cache: "no-store" });
+          if (r.status === 404) {
+            el("focusErr").textContent = "Face recognition disabled.";
+            el("focusErr").style.display = "block";
+            return;
+          }
+          const d = await r.json();
+          el("sessionDump").textContent = JSON.stringify(d, null, 2);
+          if (d.focus_mode) el("focusMode").value = d.focus_mode;
+          if (d.focus_person_id) el("focusPerson").value = d.focus_person_id;
+        } catch (e) {
+          el("focusErr").textContent = String(e);
+          el("focusErr").style.display = "block";
+        }
+      };
+
+      el("btnApplyFocus").onclick = async () => {
+        el("focusErr").style.display = "none";
+        const sid = el("visionSid").value.trim();
+        const mode = el("focusMode").value;
+        const person_id = el("focusPerson").value.trim();
+        const body = { vision_session_id: sid, mode, force: el("chkForceFocus").checked };
+        if (mode === "person") body.person_id = person_id;
+        try {
+          const r = await faceMutatingFetch("/api/face/focus", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }, "Apply face focus");
+          if (!r.ok) {
+            const t = await r.text();
+            el("focusErr").textContent = t;
+            el("focusErr").style.display = "block";
+            return;
+          }
+          const d = await r.json();
+          el("sessionDump").textContent = JSON.stringify(d, null, 2);
+        } catch (e) {
+          el("focusErr").textContent = String(e);
+          el("focusErr").style.display = "block";
+        }
+      };
+
+      el("btnEnroll").onclick = async () => {
+        el("enrollMsg").style.display = "none";
+        const person_id = el("enrollId").value.trim();
+        const display_name = el("enrollName").value.trim();
+        const notes = el("enrollNotes").value.trim();
+        if (!person_id || !display_name) return;
+        try {
+          const vsid = el("visionSid").value.trim();
+          const payload = {
+            person_id,
+            display_name,
+            notes: notes || undefined,
+            switch_focus: true,
+          };
+          if (vsid) payload.vision_session_id = vsid;
+          const r = await faceMutatingFetch("/api/face/person", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }, "Save person");
+          if (!r.ok) {
+            showToast(formatApiErrorBody(await r.text()), "err");
+            return;
+          }
+          el("enrollMsg").textContent = "Saved.";
+          el("enrollMsg").style.display = "block";
+          showToast("Saved " + display_name + " (" + person_id + ").", "ok");
+          await loadPersons();
+          if (el("visionSid").value.trim()) el("btnLoadSession").click();
+        } catch (e) {
+          showToast(String(e), "err");
+        }
+      };
+
+      el("btnLoadTurns").onclick = () => fetchTurnsDump(el("turnsPid").value);
+      window.addEventListener("beforeunload", () => stopCameraStream());
+
+      refreshRuntime();
+      refreshPendingQuality();
+      loadPersons();
+    }
+
+    document.addEventListener("DOMContentLoaded", initFaceManager);
+  </script>
+</body>
+</html>

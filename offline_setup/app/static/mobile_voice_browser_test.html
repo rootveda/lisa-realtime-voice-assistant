@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile Voice Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; max-width: 900px; }
+    #log { background: #111; color: #ddd; padding: 10px; height: 240px; overflow: auto; white-space: pre-wrap; }
+    input, textarea, button { width: 100%; margin-top: 8px; padding: 8px; font-size: 14px; }
+    button { width: auto; margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <div class="lisa-page-layout" style="max-width:960px;margin:16px auto;padding:0 16px;">
+    <aside class="lisa-side-panel" data-lisa-security-panel>
+      <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite" style="margin-top:0;">Checking security mode…</div>
+    </aside>
+    <main>
+  <h3>Mobile Voice Browser Test</h3>
+  <p>Connects to <code>/ws/mobile-voice</code>, sends client-ready, streams mic PCM 16k int16.</p>
+  <input id="wsUrl" />
+  <label for="instructionPreset">Saved instructions</label>
+  <select id="instructionPreset"></select>
+  <textarea id="prompt" placeholder="Loading default instructions..."></textarea>
+  <div>
+    <button id="connect">Connect + Mic</button>
+    <button id="stop">Stop</button>
+    <span id="status">Disconnected</span>
+  </div>
+  <div id="log"></div>
+    </main>
+  </div>
+  <script>
+    const wsUrlEl = document.getElementById("wsUrl");
+    const instructionPresetEl = document.getElementById("instructionPreset");
+    const promptEl = document.getElementById("prompt");
+    const INSTRUCTION_ID_KEY = "mobileVoiceTest.instructionId.v1";
+    const FALLBACK_INSTRUCTION_PRESETS = [
+      { id: "instruction1", label: "instruction1" },
+      { id: "instruction3", label: "instruction3" },
+      { id: "instruction3", label: "instruction3" },
+    ];
+    const logEl = document.getElementById("log");
+    const statusEl = document.getElementById("status");
+    let ws, stream, ctx, src, proc, playCtx, playAt = 0;
+    wsUrlEl.value = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/mobile-voice`;
+    const log = (m) => { logEl.textContent += `[${new Date().toLocaleTimeString()}] ${m}\n`; logEl.scrollTop = logEl.scrollHeight; };
+    async function loadInstructionPrompt(id, opts = {}) {
+      const onlyIfEmpty = !!opts.onlyIfEmpty;
+      try {
+        const res = await fetch(`/api/default-instructions?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const text = (data.prompt || "").trim();
+        if (text) {
+          if (onlyIfEmpty && promptEl.value.trim()) return;
+          promptEl.value = text;
+          return;
+        }
+      } catch (e) {
+        log(`Could not load instructions: ${e.message}`);
+      }
+      if (!onlyIfEmpty || !promptEl.value.trim()) promptEl.value = "You are concise and helpful.";
+    }
+    function populateInstructionSelect(items) {
+      instructionPresetEl.innerHTML = "";
+      for (const it of items) {
+        const o = document.createElement("option");
+        o.value = it.id;
+        o.textContent = it.label || it.id;
+        instructionPresetEl.appendChild(o);
+      }
+    }
+    async function initInstructions() {
+      let items = [];
+      let defaultId = "instruction1";
+      try {
+        const res = await fetch("/api/instructions", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          items = Array.isArray(data.items) ? data.items : [];
+          defaultId = data.default_id || (items[0] && items[0].id) || "instruction1";
+        }
+      } catch (e) {
+        log(`instruction list: ${e.message}`);
+        items = [];
+      }
+      if (!items.length) {
+        populateInstructionSelect(FALLBACK_INSTRUCTION_PRESETS);
+        let chosen = localStorage.getItem(INSTRUCTION_ID_KEY);
+        if (!chosen || !FALLBACK_INSTRUCTION_PRESETS.some((x) => x.id === chosen)) chosen = "instruction1";
+        instructionPresetEl.value = chosen;
+        await loadInstructionPrompt(chosen, { onlyIfEmpty: true });
+        return;
+      }
+      populateInstructionSelect(items);
+      let chosen = localStorage.getItem(INSTRUCTION_ID_KEY);
+      if (!chosen || !items.some((x) => x.id === chosen)) chosen = defaultId;
+      instructionPresetEl.value = chosen;
+      await loadInstructionPrompt(chosen, { onlyIfEmpty: true });
+    }
+    async function preloadDefaultInstructions() {
+      const id = instructionPresetEl.value || "instruction1";
+      await loadInstructionPrompt(id, { onlyIfEmpty: true });
+    }
+    instructionPresetEl.addEventListener("change", () => {
+      const id = instructionPresetEl.value;
+      if (!id) return;
+      localStorage.setItem(INSTRUCTION_ID_KEY, id);
+      loadInstructionPrompt(id, { onlyIfEmpty: false }).catch(() => {});
+    });
+    const f32to16 = (a) => { const o = new Int16Array(a.length); for (let i=0;i<a.length;i++){const s=Math.max(-1,Math.min(1,a[i])); o[i]=s<0?s*0x8000:s*0x7fff;} return o; };
+    const rs16 = (a, r) => { if (r===16000) return a; const n=Math.max(1,Math.round(a.length*16000/r)); const o=new Float32Array(n); const k=r/16000; for(let i=0;i<n;i++){const x=i*k,j=Math.floor(x),j2=Math.min(j+1,a.length-1),t=x-j;o[i]=a[j]*(1-t)+a[j2]*t;} return o; };
+    const play = (u8) => { if (!playCtx){playCtx=new AudioContext({sampleRate:16000}); playAt=playCtx.currentTime;} const i16=new Int16Array(u8.buffer,u8.byteOffset,Math.floor(u8.byteLength/2)); const f=new Float32Array(i16.length); for(let i=0;i<i16.length;i++)f[i]=i16[i]/32768; const b=playCtx.createBuffer(1,f.length,16000); b.copyToChannel(f,0); const s=playCtx.createBufferSource(); s.buffer=b; s.connect(playCtx.destination); playAt=Math.max(playAt,playCtx.currentTime); s.start(playAt); playAt+=b.duration; };
+    async function start() {
+      if (!navigator.mediaDevices?.getUserMedia) { log("getUserMedia unavailable."); return; }
+      await preloadDefaultInstructions();
+      ws = new WebSocket(wsUrlEl.value); ws.binaryType="arraybuffer"; statusEl.textContent="Connecting";
+      ws.onopen = async () => {
+        ws.send(new TextEncoder().encode(JSON.stringify({
+          type: "client-ready",
+          messages: [{ role: "system", content: promptEl.value }],
+          llm_params: { max_tokens: 2048, temperature: 0.4, max_tokens_floor: 1024 },
+        })));
+        stream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+        ctx = new AudioContext(); src = ctx.createMediaStreamSource(stream); proc = ctx.createScriptProcessor(2048,1,1);
+        src.connect(proc); proc.connect(ctx.destination);
+        proc.onaudioprocess = (e)=>{ if (ws?.readyState!==1) return; const m=e.inputBuffer.getChannelData(0); ws.send(f32to16(rs16(m,ctx.sampleRate)).buffer); };
+        statusEl.textContent="Streaming";
+      };
+      ws.onmessage = (e) => { if (typeof e.data === "string") return log(`TEXT ${e.data.slice(0,120)}`); const u8=new Uint8Array(e.data); if (u8[0]===123) { try { return log(`JSON ${new TextDecoder().decode(u8).slice(0,160)}`);} catch(_){} } play(u8); };
+      ws.onerror = () => log("ws error");
+      ws.onclose = (e) => { log(`ws closed ${e.code}`); stop(); };
+    }
+    function stop() {
+      if (proc) proc.disconnect(); if (src) src.disconnect(); if (ctx) ctx.close();
+      if (stream) stream.getTracks().forEach(t=>t.stop()); if (ws) try{ws.close();}catch(_){}
+      proc=src=ctx=stream=ws=null; statusEl.textContent="Disconnected";
+    }
+    initInstructions();
+    document.getElementById("connect").onclick = ()=>start().catch(e=>log(e.message));
+    document.getElementById("stop").onclick = stop;
+  </script>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

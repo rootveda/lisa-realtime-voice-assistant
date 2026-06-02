@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile Voice + Vision Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; max-width: 900px; }
+    #log { background: #111; color: #ddd; padding: 10px; height: 220px; overflow: auto; white-space: pre-wrap; }
+    input, textarea, button { width: 100%; margin-top: 8px; padding: 8px; font-size: 14px; }
+    button { width: auto; margin-right: 8px; }
+    #vid { max-width: 480px; width: 100%; background: #222; border-radius: 4px; }
+    #cap { display: none; }
+    .row { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="lisa-page-layout" style="max-width:960px;margin:16px auto;padding:0 16px;">
+    <aside class="lisa-side-panel" data-lisa-security-panel>
+      <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite" style="margin-top:0;">Checking security mode…</div>
+    </aside>
+    <main>
+  <h3>Mobile Voice + Vision Test</h3>
+  <p>
+    Opens <code>/ws/mobile-voice-vision</code> (JPEG) and <code>/ws/mobile-voice</code> (PCM).
+    Use the same session id for both. Ask aloud &quot;what do you see?&quot; with camera on.
+  </p>
+  <p class="row"><strong>Session id</strong> <code id="sid"></code></p>
+  <input id="wsUrl" />
+  <label for="instructionPreset">Saved instructions</label>
+  <select id="instructionPreset"></select>
+  <textarea id="prompt" placeholder="Loading default instructions..."></textarea>
+  <div>
+    <button id="connect">Connect mic + camera</button>
+    <button id="stop">Stop</button>
+    <span id="status">Disconnected</span>
+  </div>
+  <label class="row" style="display:flex;align-items:center;gap:8px;">
+    <input id="visionAugmentEveryTurn" type="checkbox" style="width:auto;" />
+    <span>Every user turn uses camera caption (<code>vision_augment_every_turn</code>; slower). Off = regex / vision intents only.</span>
+  </label>
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="cap" width="480" height="270"></canvas>
+  <div id="log"></div>
+    </main>
+  </div>
+  <script>
+    const wsUrlEl = document.getElementById("wsUrl");
+    const instructionPresetEl = document.getElementById("instructionPreset");
+    const promptEl = document.getElementById("prompt");
+    const INSTRUCTION_ID_KEY = "mobileVoiceVisionTest.instructionId.v1";
+    const FALLBACK_INSTRUCTION_PRESETS = [
+      { id: "instruction1", label: "instruction1" },
+      { id: "instruction3", label: "instruction3" },
+      { id: "instruction3", label: "instruction3" },
+    ];
+    const logEl = document.getElementById("log");
+    const statusEl = document.getElementById("status");
+    const sidEl = document.getElementById("sid");
+    const vidEl = document.getElementById("vid");
+    const capEl = document.getElementById("cap");
+    const ctx2d = capEl.getContext("2d");
+    const visionAugmentEveryTurnEl = document.getElementById("visionAugmentEveryTurn");
+
+    let sessionId = crypto.randomUUID();
+    sidEl.textContent = sessionId;
+
+    let visionWs, voiceWs, stream, ctx, src, proc, playCtx, playAt = 0;
+    let frameId = 0;
+    let encodeTimer = null;
+    const FRAME_MS = 500;
+
+    wsUrlEl.value = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/mobile-voice`;
+
+    const log = (m) => {
+      logEl.textContent += `[${new Date().toLocaleTimeString()}] ${m}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    function visionWsUrl() {
+      const scheme = location.protocol === "https:" ? "wss" : "ws";
+      return `${scheme}://${location.host}/ws/mobile-voice-vision?session_id=${encodeURIComponent(sessionId)}`;
+    }
+
+    function syncVisionPrefsToVoice() {
+      if (!voiceWs || voiceWs.readyState !== 1 || !sessionId) return;
+      try {
+        voiceWs.send(new TextEncoder().encode(JSON.stringify({
+          type: "vision-prefs",
+          vision_session_id: sessionId,
+          vision_augment_every_turn: !!visionAugmentEveryTurnEl.checked,
+        })));
+      } catch (_) {}
+    }
+    visionAugmentEveryTurnEl.addEventListener("change", syncVisionPrefsToVoice);
+
+    function sendJpegBinary(ws, fid, jpegBytes) {
+      if (!ws || ws.readyState !== 1) return;
+      const buf = new ArrayBuffer(9 + jpegBytes.length);
+      const v = new DataView(buf);
+      const out = new Uint8Array(buf);
+      out[0] = 1;
+      v.setUint32(1, fid >>> 0, false);
+      v.setUint32(5, jpegBytes.length >>> 0, false);
+      out.set(jpegBytes, 9);
+      ws.send(buf);
+    }
+
+    async function loadInstructionPrompt(id, opts = {}) {
+      const onlyIfEmpty = !!opts.onlyIfEmpty;
+      try {
+        const res = await fetch(`/api/default-instructions?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const text = (data.prompt || "").trim();
+        if (text) {
+          if (onlyIfEmpty && promptEl.value.trim()) return;
+          promptEl.value = text;
+          return;
+        }
+      } catch (e) {
+        log(`Could not load instructions: ${e.message}`);
+      }
+      if (!onlyIfEmpty || !promptEl.value.trim()) promptEl.value = "You are concise and helpful.";
+    }
+
+    function populateInstructionSelect(items) {
+      instructionPresetEl.innerHTML = "";
+      for (const it of items) {
+        const o = document.createElement("option");
+        o.value = it.id;
+        o.textContent = it.label || it.id;
+        instructionPresetEl.appendChild(o);
+      }
+    }
+
+    async function initInstructions() {
+      let items = [];
+      let defaultId = "instruction1";
+      try {
+        const res = await fetch("/api/instructions", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          items = Array.isArray(data.items) ? data.items : [];
+          defaultId = data.default_id || (items[0] && items[0].id) || "instruction1";
+        }
+      } catch (e) {
+        log(`instruction list: ${e.message}`);
+        items = [];
+      }
+      if (!items.length) {
+        populateInstructionSelect(FALLBACK_INSTRUCTION_PRESETS);
+        let chosen = localStorage.getItem(INSTRUCTION_ID_KEY);
+        if (!chosen || !FALLBACK_INSTRUCTION_PRESETS.some((x) => x.id === chosen)) chosen = "instruction1";
+        instructionPresetEl.value = chosen;
+        await loadInstructionPrompt(chosen, { onlyIfEmpty: true });
+        return;
+      }
+      populateInstructionSelect(items);
+      let chosen = localStorage.getItem(INSTRUCTION_ID_KEY);
+      if (!chosen || !items.some((x) => x.id === chosen)) chosen = defaultId;
+      instructionPresetEl.value = chosen;
+      await loadInstructionPrompt(chosen, { onlyIfEmpty: true });
+    }
+
+    async function preloadDefaultInstructions() {
+      const id = instructionPresetEl.value || "instruction1";
+      await loadInstructionPrompt(id, { onlyIfEmpty: true });
+    }
+
+    instructionPresetEl.addEventListener("change", () => {
+      const id = instructionPresetEl.value;
+      if (!id) return;
+      localStorage.setItem(INSTRUCTION_ID_KEY, id);
+      loadInstructionPrompt(id, { onlyIfEmpty: false }).catch(() => {});
+    });
+
+    const f32to16 = (a) => {
+      const o = new Int16Array(a.length);
+      for (let i = 0; i < a.length; i++) {
+        const s = Math.max(-1, Math.min(1, a[i]));
+        o[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      return o;
+    };
+    const rs16 = (a, r) => {
+      if (r === 16000) return a;
+      const n = Math.max(1, Math.round(a.length * 16000 / r));
+      const o = new Float32Array(n);
+      const k = r / 16000;
+      for (let i = 0; i < n; i++) {
+        const x = i * k;
+        const j = Math.floor(x);
+        const j2 = Math.min(j + 1, a.length - 1);
+        const t = x - j;
+        o[i] = a[j] * (1 - t) + a[j2] * t;
+      }
+      return o;
+    };
+    const play = (u8) => {
+      if (!playCtx) {
+        playCtx = new AudioContext({ sampleRate: 16000 });
+        playAt = playCtx.currentTime;
+      }
+      const i16 = new Int16Array(u8.buffer, u8.byteOffset, Math.floor(u8.byteLength / 2));
+      const f = new Float32Array(i16.length);
+      for (let i = 0; i < i16.length; i++) f[i] = i16[i] / 32768;
+      const b = playCtx.createBuffer(1, f.length, 16000);
+      b.copyToChannel(f, 0);
+      const s = playCtx.createBufferSource();
+      s.buffer = b;
+      s.connect(playCtx.destination);
+      playAt = Math.max(playAt, playCtx.currentTime);
+      s.start(playAt);
+      playAt += b.duration;
+    };
+
+    function startVisionCapture() {
+      if (encodeTimer) clearInterval(encodeTimer);
+      const tick = () => {
+        if (!visionWs || visionWs.readyState !== 1 || !vidEl.videoWidth) return;
+        const w = Math.min(480, vidEl.videoWidth);
+        const h = Math.round((vidEl.videoHeight * w) / vidEl.videoWidth);
+        capEl.width = w;
+        capEl.height = h;
+        ctx2d.drawImage(vidEl, 0, 0, w, h);
+        capEl.toBlob(
+          (blob) => {
+            if (!blob) return;
+            blob.arrayBuffer().then((ab) => {
+              sendJpegBinary(visionWs, frameId++, new Uint8Array(ab));
+            });
+          },
+          "image/jpeg",
+          0.74
+        );
+      };
+      tick();
+      encodeTimer = setInterval(tick, FRAME_MS);
+    }
+
+    async function start() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        log("getUserMedia unavailable.");
+        return;
+      }
+      await preloadDefaultInstructions();
+
+      sessionId = crypto.randomUUID();
+      sidEl.textContent = sessionId;
+
+      voiceWs = new WebSocket(wsUrlEl.value);
+      voiceWs.binaryType = "arraybuffer";
+      statusEl.textContent = "Connecting";
+
+      voiceWs.onopen = async () => {
+        voiceWs.send(
+          new TextEncoder().encode(
+            JSON.stringify({
+              type: "client-ready",
+              messages: [{ role: "system", content: promptEl.value }],
+              llm_params: { max_tokens: 2048, temperature: 0.4, max_tokens_floor: 1024 },
+              vision_session_id: sessionId,
+              vision_enable: true,
+              vision_augment_every_turn: !!visionAugmentEveryTurnEl.checked,
+            })
+          )
+        );
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: "user" } });
+        vidEl.srcObject = stream;
+        await vidEl.play().catch(() => {});
+        await new Promise((resolve) => {
+          if (vidEl.videoWidth > 0) return resolve();
+          const done = () => resolve();
+          vidEl.addEventListener("loadeddata", done, { once: true });
+          vidEl.addEventListener("playing", done, { once: true });
+          setTimeout(done, 3000);
+        });
+
+        visionWs = new WebSocket(visionWsUrl());
+        visionWs.binaryType = "arraybuffer";
+        visionWs.onopen = () => {
+          visionWs.send(JSON.stringify({ type: "client-ready", max_fps: 2, max_width: 480 }));
+          log("vision ws open");
+          startVisionCapture();
+        };
+        visionWs.onerror = () => log("vision ws error");
+        visionWs.onclose = (e) => log(`vision ws closed ${e.code}`);
+
+        ctx = new AudioContext();
+        src = ctx.createMediaStreamSource(stream);
+        proc = ctx.createScriptProcessor(2048, 1, 1);
+        src.connect(proc);
+        proc.connect(ctx.destination);
+        proc.onaudioprocess = (e) => {
+          if (voiceWs?.readyState !== 1) return;
+          const m = e.inputBuffer.getChannelData(0);
+          voiceWs.send(f32to16(rs16(m, ctx.sampleRate)).buffer);
+        };
+        statusEl.textContent = "Streaming voice + vision";
+      };
+
+      voiceWs.onmessage = (e) => {
+        if (typeof e.data === "string") return log(`TEXT ${e.data.slice(0, 120)}`);
+        const u8 = new Uint8Array(e.data);
+        if (u8[0] === 123) {
+          try {
+            return log(`JSON ${new TextDecoder().decode(u8).slice(0, 160)}`);
+          } catch (_) {}
+        }
+        play(u8);
+      };
+      voiceWs.onerror = () => log("voice ws error");
+      voiceWs.onclose = (e) => {
+        log(`voice ws closed ${e.code}`);
+        stop();
+      };
+    }
+
+    function stop() {
+      if (encodeTimer) {
+        clearInterval(encodeTimer);
+        encodeTimer = null;
+      }
+      if (proc) proc.disconnect();
+      if (src) src.disconnect();
+      if (ctx) ctx.close();
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      vidEl.srcObject = null;
+      if (visionWs) try { visionWs.close(); } catch (_) {}
+      if (voiceWs) try { voiceWs.close(); } catch (_) {}
+      proc = src = ctx = stream = visionWs = voiceWs = null;
+      statusEl.textContent = "Disconnected";
+    }
+
+    initInstructions();
+    document.getElementById("connect").onclick = () => start().catch((e) => log(e.message));
+    document.getElementById("stop").onclick = stop;
+  </script>
+  <script src="/lisa-admin-ui.js"></script>
+</body>
+</html>

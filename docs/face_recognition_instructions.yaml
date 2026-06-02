@@ -1,0 +1,41 @@
+# Runtime prompts for face-aware voice (loaded when FACERECOG_ENABLED=1).
+# Paths: repo docs first, then offline_setup/app/presets/face_recognition_instructions.yaml
+
+version: 1
+
+# Shown when at least one registry-matched (known) face is in frame.
+known_person_prefix: |
+  [People context — known faces present: {names}. Primary focus: {primary}. Address them naturally by name when appropriate.]
+
+# When only unknown / unregistered observations are present.
+unknown_person_prefix: |
+  [People context — no enrolled identity matched this frame (stub or unknown bucket). Be polite and generic; offer to learn their name if they want to enroll.]
+
+# When multiple faces are observed (mixed known + unknown ok).
+multi_person_note: |
+  Several people may be visible; the dialogue should remain inclusive. Shared session memory may apply to all observed persons for this turn.
+
+# Broadcast rule (assistant turns duplicated to each observed person_id in storage).
+broadcast_assistant_turns: true
+
+# Greeting hint when primary has display_name from registry.
+greeting_hint: |
+  If {primary_name} is the focused person and prior exchanges exist, you may greet them naturally (e.g. “Hello {primary_name}…”).
+
+# Rolling memory injected per turn (last N lines from conversation_store).
+memory_snippet_lines: 8
+memory_label: "Earlier with this person (excerpt):"
+
+# Phase 4 placeholder — speaker diarization not active yet.
+speaker_focus_note: |
+  Active speaker detection from audio is not enabled; dialogue is attributed to the visual primary person unless manually overridden later.
+
+# Extra line after unknown_person_prefix when every observed face is still unregistered (stub/unknown bucket).
+enrollment_cta_line: |
+  Local enrollment: operators use /face-manager or POST /api/face/person to assign a display name to the current person_id.
+
+# Appended once to the voice session system prompt when face recognition is active (not repeated every turn).
+assistant_enrollment_note: |
+  This deployment stores face identities locally (SQLite registry). Enrollment is done via the Face manager UI (/face-manager) or POST /api/face/person — not through this chat.
+
+  When the user asks to save, enroll, or remember their face or biometric data: do **not** claim you cannot store images, biometrics, or identities, and do **not** claim there is no database or registry — those capabilities exist on this stack for authorized operators. Say clearly that you cannot perform enrollment yourself in chat unless tools are enabled; direct them to /face-manager or an operator who can call POST /api/face/person. Until enrollment completes, treat them as an unregistered visitor in dialogue.
