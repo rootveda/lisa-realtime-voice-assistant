@@ -402,6 +402,8 @@ class _ReplayFirstBytesWebSocket:
 
 # Apply patch on import
 _APPLIED_IN_PROCESS = False
+# Wall-clock epoch when this bot process first applied the offline patch (resets on stack/bot restart).
+_BOT_PROCESS_STARTED_AT: float | None = None
 
 _ASSISTANT_CONSOLE_POWER_LOCK = threading.Lock()
 
@@ -840,14 +842,48 @@ def _lisa_apply_security_headers(response, *, is_html: bool, embeddable: bool = 
         headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
 
 
+def _linux_process_start_epoch() -> float | None:
+    """Best-effort wall time when this OS process started (Linux /proc)."""
+    try:
+        clk_tck = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
+        with open("/proc/self/stat", encoding="ascii", errors="replace") as f:
+            stat = f.read().split()
+        start_ticks = int(stat[21])
+        with open("/proc/uptime", encoding="ascii", errors="replace") as f:
+            uptime_sec = float(f.read().split()[0])
+        boot_epoch = time.time() - uptime_sec
+        return boot_epoch + (start_ticks / clk_tck)
+    except Exception:
+        return None
+
+
+def _bot_app_uptime_payload() -> dict:
+    """Process-local uptime for /api/runtime-status (survives browser refresh, resets on bot restart)."""
+    global _BOT_PROCESS_STARTED_AT
+    started = _BOT_PROCESS_STARTED_AT
+    if started is None:
+        started = _linux_process_start_epoch()
+        if started is not None:
+            _BOT_PROCESS_STARTED_AT = started
+    if started is None:
+        return {"pid": os.getpid(), "started_at_unix": None, "uptime_sec": None}
+    uptime = max(0.0, time.time() - started)
+    return {
+        "pid": os.getpid(),
+        "started_at_unix": started,
+        "uptime_sec": round(uptime, 1),
+    }
+
+
 def _apply():
-    global _APPLIED_IN_PROCESS
+    global _APPLIED_IN_PROCESS, _BOT_PROCESS_STARTED_AT
     _patch_aioice_loopback()
     if _APPLIED_IN_PROCESS:
         # Already applied in this Python process (e.g. multiple imports).
         # Do not use env var checks here: env is inherited across process restarts.
         return
     _APPLIED_IN_PROCESS = True
+    _BOT_PROCESS_STARTED_AT = time.time()
 
     import pipecat.runner.run as run_mod
     from pipecat.transports.smallwebrtc.request_handler import SmallWebRTCRequestHandler
@@ -1513,6 +1549,54 @@ def _apply():
                 media_type="application/json",
             )
 
+        @app.get("/api/admin/token-status", include_in_schema=False)
+        async def admin_token_status(request: Request):
+            """Read-only check: is the Bearer token in this request accepted by the server?"""
+            required = _lisa_admin_token_required()
+            configured = bool(_lisa_admin_token())
+            supplied = _lisa_bearer_token_from_headers(request)
+            if not required:
+                payload = {
+                    "status": "not_required",
+                    "token_valid": True,
+                    "token_supplied": bool(supplied),
+                    "message": "Home dev mode — admin token not required from this browser.",
+                }
+            elif not configured:
+                payload = {
+                    "status": "fail_closed",
+                    "token_valid": False,
+                    "token_supplied": bool(supplied),
+                    "message": "Server misconfigured: public bind without LISA_ADMIN_TOKEN.",
+                }
+            elif not supplied:
+                payload = {
+                    "status": "missing",
+                    "token_valid": False,
+                    "token_supplied": False,
+                    "message": "Not entered — paste the token from lisa_admin_token.env.",
+                }
+            elif hmac.compare_digest(supplied, _lisa_admin_token()):
+                payload = {
+                    "status": "valid",
+                    "token_valid": True,
+                    "token_supplied": True,
+                    "message": "Accepted — matches the server token.",
+                }
+            else:
+                payload = {
+                    "status": "invalid",
+                    "token_valid": False,
+                    "token_supplied": True,
+                    "message": "Rejected — does not match the server token.",
+                }
+            payload["admin_token_required"] = required
+            payload["token_configured"] = configured
+            return Response(
+                content=json.dumps(payload).encode(),
+                media_type="application/json",
+            )
+
         @app.get("/api/context-stress/run/capabilities", include_in_schema=False)
         async def context_stress_run_capabilities():
             tok = (os.environ.get("CONTEXT_STRESS_RUN_TOKEN") or "").strip()
@@ -1872,6 +1956,7 @@ def _apply():
             stt_model_size_bytes = _nemotron_stt_model_size_bytes()
 
             return {
+                "app": _bot_app_uptime_payload(),
                 "models": {
                     "llm_model": model,
                     "llm_provider": provider,

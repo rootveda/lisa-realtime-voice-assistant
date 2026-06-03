@@ -2,6 +2,8 @@
   "use strict";
 
   const TOKEN_KEY = "assistantConsole.lisaAdminToken.v1";
+  /** Real LISA_ADMIN_TOKEN values are long hex strings; ignore partial/autofill garbage. */
+  const MIN_ADMIN_TOKEN_LEN = 16;
   const STYLE_ID = "lisa-admin-ui-style";
   const OVERLAY_ID = "lisaNoticeOverlay";
   const BANNER_ID = "securityModeBanner";
@@ -18,8 +20,10 @@
   let adminTokenRequired = false;
   let tokenInputId = null;
   let tokenWrapId = null;
+  let tokenStatusId = null;
   let onCapabilities = null;
   let autoBootEnabled = true;
+  let tokenStatusTimer = null;
 
   function safeTrim(v) {
     return String(v ?? "").trim();
@@ -119,6 +123,46 @@
         font-family: ui-monospace, monospace;
         font-size: 11px;
       }
+      .lisa-admin-token-status {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.45;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid #243357;
+        border-left-width: 4px;
+        background: rgba(12, 18, 36, 0.55);
+        color: #8cb8c7;
+      }
+      .lisa-admin-token-status.checking {
+        color: #8cb8c7 !important;
+        border-left-color: #45e6ff;
+        background: rgba(12, 18, 36, 0.65);
+      }
+      .lisa-admin-token-status.ok {
+        color: #7dffb2 !important;
+        border-left-color: #3ecf7a;
+        border-color: #2a6b4a;
+        background: #0f2a1c;
+      }
+      .lisa-admin-token-status.warn {
+        color: #ffb86a !important;
+        border-left-color: #e8a040;
+        border-color: #8b5432;
+        background: #2a1c10;
+      }
+      .lisa-admin-token-status.bad {
+        color: #ff8a8a !important;
+        border-left-color: #e85c5c;
+        border-color: #8b3232;
+        background: #2a1010;
+      }
+      .lisa-admin-token-status.muted {
+        color: #9eb8c8 !important;
+        border-left-color: #4a6080;
+        background: rgba(12, 18, 36, 0.45);
+      }
       .security-mode-banner a {
         color: inherit;
         font-weight: 600;
@@ -155,28 +199,28 @@
 
   function hasLocalTokenField() {
     if (tokenInputId && document.getElementById(tokenInputId)) return true;
-    return !!(
-      document.getElementById("lisaAdminTokenInput") ||
-      document.getElementById("arenaAdminTokenInput")
+    return !!document.getElementById("lisaAdminTokenInput");
+  }
+
+  function unifiedTokenLocationHtml() {
+    return (
+      '<a href="/assistant-console">Assistant Console</a> → ' +
+      "<strong>Workspace configuration → Admin token</strong>"
     );
   }
 
-  function tokenFieldLabel() {
-    if (document.getElementById("arenaAdminTokenInput")) return "Admin token";
-    return "LLM Routing";
-  }
-
   function adminModeBannerHtml() {
-    const base =
-      "<strong>Admin mode</strong> — Bearer token required for stack changes " +
-      "(Apply Routing, full restart, RAG ingest). Paste <code>LISA_ADMIN_TOKEN</code> in ";
     if (isAssistantConsolePage() || hasLocalTokenField()) {
-      return base + "<strong>" + tokenFieldLabel() + "</strong> below.";
+      return (
+        "<strong>Admin mode</strong> — Bearer token required for routing, full restart, RAG, and managers. " +
+        "Paste it in the <strong>Admin token</strong> field below (from <code>offline_setup/lisa_admin_token.env</code>)."
+      );
     }
     return (
-      base +
-      "<strong>LLM Routing</strong> on the " +
-      '<a href="/assistant-console">Assistant Console</a>.'
+      "<strong>Admin mode</strong> — Bearer token required for stack changes. " +
+      "Paste it in " +
+      unifiedTokenLocationHtml() +
+      " (bottom of Workspace configuration)."
     );
   }
 
@@ -268,7 +312,17 @@
     s = s.replace(/^Bearer\s+/i, "");
     s = s.replace(/[\r\n]+/g, "");
     s = safeTrim(s.replace(/^['"]|['"]$/g, ""));
+    if (s.length < MIN_ADMIN_TOKEN_LEN) return "";
     return s;
+  }
+
+  function clearStoredAdminToken() {
+    try {
+      global.localStorage.removeItem(TOKEN_KEY);
+    } catch (_) {}
+    allTokenInputs().forEach(function (el) {
+      el.value = "";
+    });
   }
 
   function allTokenInputs() {
@@ -284,15 +338,14 @@
   }
 
   function tokenInputEl() {
-    const toolbar = document.querySelector("[data-lisa-admin-token-focus]");
-    if (toolbar) return toolbar;
+    const focus = document.querySelector("[data-lisa-admin-token-focus]");
+    if (focus) return focus;
     const inputs = allTokenInputs();
     return inputs.length ? inputs[0] : null;
   }
 
   function syncTokenInputs(tok) {
     const normalized = normalizeAdminToken(tok);
-    if (!normalized) return;
     allTokenInputs().forEach(function (el) {
       el.value = normalized;
     });
@@ -316,7 +369,10 @@
       tok = normalizeAdminToken(allTokenInputs()[i].value || "");
       if (tok) break;
     }
-    if (!tok) return;
+    if (!tok) {
+      clearStoredAdminToken();
+      return;
+    }
     try {
       global.localStorage.setItem(TOKEN_KEY, tok);
     } catch (_) {}
@@ -334,16 +390,107 @@
     });
   }
 
+  function tokenStatusEl() {
+    return tokenStatusId ? document.getElementById(tokenStatusId) : null;
+  }
+
+  function paintAdminTokenStatus(j) {
+    const el = tokenStatusEl();
+    if (!el || !j) return;
+    const st = String(j.status || "");
+    el.classList.remove("checking", "ok", "warn", "bad", "muted");
+    if (st === "valid") el.classList.add("ok");
+    else if (st === "invalid" || st === "error") el.classList.add("bad");
+    else if (st === "missing") el.classList.add("warn");
+    else if (st === "fail_closed") el.classList.add("bad");
+    else el.classList.add("muted");
+    el.textContent = String(j.message || "").trim() || "Status unknown.";
+  }
+
+  function scheduleAdminTokenStatusCheck() {
+    if (tokenStatusTimer) clearTimeout(tokenStatusTimer);
+    tokenStatusTimer = setTimeout(function () {
+      tokenStatusTimer = null;
+      refreshAdminTokenStatus().catch(function () {});
+    }, 400);
+  }
+
+  async function refreshAdminTokenStatus() {
+    const el = tokenStatusEl();
+    if (!el) return null;
+    if (!adminTokenRequired) {
+      paintAdminTokenStatus({
+        status: "not_required",
+        message: "Home dev mode — admin token not required on this machine.",
+      });
+      return null;
+    }
+    const tok = tokenValue();
+    if (!tok) {
+      paintAdminTokenStatus({
+        status: "missing",
+        message: "Not entered — paste the token from lisa_admin_token.env.",
+      });
+      return null;
+    }
+    el.classList.remove("ok", "warn", "bad", "muted");
+    el.classList.add("checking");
+    el.textContent = "Checking — verifying token against server…";
+    try {
+      const r = await fetch("/api/admin/token-status", {
+        cache: "no-store",
+        headers: adminHeaders(),
+      });
+      const j = await r.json().catch(function () {
+        return {};
+      });
+      if (!r.ok) {
+        const msg =
+          r.status === 404
+            ? "Token check unavailable — restart the stack once (./offline_setup/lisa_stack.sh restart --admin)."
+            : String(j.error || j.detail || j.message || `Token check failed (HTTP ${r.status}).`);
+        paintAdminTokenStatus({ status: "error", message: msg });
+        return j;
+      }
+      if (!j.status && !j.message) {
+        paintAdminTokenStatus({
+          status: "error",
+          message: "Unexpected response from token check.",
+        });
+        return j;
+      }
+      paintAdminTokenStatus(j);
+      return j;
+    } catch (_) {
+      paintAdminTokenStatus({
+        status: "error",
+        message: "Could not reach /api/admin/token-status.",
+      });
+      return null;
+    }
+  }
+
   function initTokenField() {
     let saved = "";
     try {
-      saved = normalizeAdminToken(global.localStorage.getItem(TOKEN_KEY) || "");
+      const raw = global.localStorage.getItem(TOKEN_KEY) || "";
+      saved = normalizeAdminToken(raw);
+      if (raw && !saved) clearStoredAdminToken();
     } catch (_) {}
     allTokenInputs().forEach(function (el) {
-      if (saved && !normalizeAdminToken(el.value || "")) el.value = saved;
-      el.addEventListener("change", persistToken);
-      el.addEventListener("blur", persistToken);
-      el.addEventListener("input", persistToken);
+      if (!normalizeAdminToken(el.value || "") && saved) el.value = saved;
+      el.addEventListener("change", function () {
+        persistToken();
+        scheduleAdminTokenStatusCheck();
+      });
+      el.addEventListener("blur", function () {
+        persistToken();
+        scheduleAdminTokenStatusCheck();
+      });
+      el.addEventListener("input", function () {
+        persistToken();
+        scheduleAdminTokenStatusCheck();
+      });
     });
   }
 
@@ -358,11 +505,11 @@
   }
 
   function focusTokenField() {
+    if (!isAssistantConsolePage() && !hasLocalTokenField()) {
+      return;
+    }
     showTokenWraps(true);
-    const el =
-      document.querySelector("[data-lisa-admin-token-focus]") ||
-      document.getElementById("arenaAdminTokenInputToolbar") ||
-      tokenInputEl();
+    const el = tokenInputEl();
     if (el) {
       try {
         el.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -379,10 +526,14 @@
     const tok = tokenValue();
     if (tok) return true;
     const label = safeTrim(actionLabel || "This action");
+    const where =
+      isAssistantConsolePage() || hasLocalTokenField()
+        ? "Workspace configuration → Admin token at the bottom of the left panel."
+        : "Assistant Console → Workspace configuration → Admin token.";
     await showAuthError(
-      `${label} requires the admin token.\n\n` +
-        "Paste the token only (from offline_setup/lisa_admin_token.env) in the Admin token field above the Delete buttons, then try again.",
-      label
+      `${label} requires the admin token.\n\nPaste the token only (from offline_setup/lisa_admin_token.env) in ${where}`,
+      label,
+      { skipHint: true }
     );
     focusTokenField();
     return false;
@@ -403,6 +554,11 @@
       showTokenWraps(adminTokenRequired);
       renderSecurityBanner(j);
       if (typeof onCapabilities === "function") onCapabilities(j);
+      if (tokenStatusEl()) {
+        refreshAdminTokenStatus().catch(function () {
+          scheduleAdminTokenStatusCheck();
+        });
+      }
       return j;
     } catch (_) {
       if (tokenWrapId || document.querySelector("[data-lisa-admin-token]")) {
@@ -457,15 +613,9 @@
 
   function authHint() {
     if (adminTokenRequired) {
-      if (document.querySelector("[data-lisa-admin-token-focus]")) {
-        return (
-          "Paste LISA_ADMIN_TOKEN in the Admin token field above the Delete buttons " +
-          "(token only — not the whole export line). Shared with Assistant Console → LLM Routing."
-        );
-      }
       return (
-        "Paste LISA_ADMIN_TOKEN in the Admin token field on this page " +
-        "(or Assistant Console → LLM Routing) and try again."
+        "Paste the admin token once in Assistant Console → Workspace configuration → Admin token " +
+        "(token value only — not the export line). All manager pages use the same browser storage."
       );
     }
     return "Connect from this machine (127.0.0.1) or set LISA_ADMIN_TOKEN on the server.";
@@ -481,11 +631,13 @@
     return `${label} not allowed`;
   }
 
-  function showAuthError(message, actionLabel) {
+  function showAuthError(message, actionLabel, opts) {
     const title = authDeniedTitle(actionLabel);
-    const body = safeTrim(message || "Unauthorized.") + "\n\n" + authHint();
-    const el = tokenInputEl();
-    if (el) focusTokenField();
+    let body = safeTrim(message || "Unauthorized.");
+    if (!(opts && opts.skipHint)) {
+      body = body + "\n\n" + authHint();
+    }
+    focusTokenField();
     return showNotice(body, { title: title, okText: "OK", error: true });
   }
 
@@ -495,6 +647,7 @@
       (data && (data.error || data.message)) ||
       (res.status === 401 ? "Unauthorized." : "Forbidden.");
     await showAuthError(msg, actionLabel);
+    scheduleAdminTokenStatusCheck();
     return true;
   }
 
@@ -524,10 +677,14 @@
     opts = opts || {};
     tokenInputId = opts.tokenInputId || null;
     tokenWrapId = opts.tokenWrapId || null;
+    tokenStatusId = opts.tokenStatusId || null;
     onCapabilities = opts.onCapabilities || null;
     if (opts.autoBoot === false) autoBootEnabled = false;
     initTokenField();
-    return refreshCapabilities();
+    return refreshCapabilities().then(function () {
+      if (!tokenStatusEl()) return null;
+      return refreshAdminTokenStatus();
+    });
   }
 
   if (document.readyState === "loading") {
@@ -543,6 +700,7 @@
     persistToken: persistToken,
     adminHeaders: adminHeaders,
     refreshCapabilities: refreshCapabilities,
+    refreshAdminTokenStatus: refreshAdminTokenStatus,
     renderSecurityBanner: renderSecurityBanner,
     adminTokenRequired: function () {
       return adminTokenRequired;

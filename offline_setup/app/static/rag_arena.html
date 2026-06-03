@@ -330,10 +330,6 @@
         <button type="button" id="arenaSyncBtn">Sync RAG data</button>
         <button type="button" id="arenaRebuildBtn">Rebuild the index</button>
       </div>
-      <label id="arenaAdminTokenWrap" class="k" data-lisa-admin-token-wrap style="display:none;margin-top:10px;">
-        Admin token (required for delete / rebuild / upload in admin mode)
-        <input type="password" id="arenaAdminTokenInput" data-lisa-admin-token autocomplete="off" placeholder="Paste LISA_ADMIN_TOKEN from offline_setup/lisa_admin_token.env" style="width:100%;margin-top:4px;background:#0b1426;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px;font-family:ui-monospace,monospace;" />
-      </label>
       <p id="arenaMsg"></p>
       <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite">Checking security mode…</div>
     </section>
@@ -390,12 +386,6 @@
         <span class="kpi-chip" id="arenaKpiSelected">Selected: 0</span>
       </div>
       <div class="sort-legend">Tip: click any column header to sort (click again to toggle direction).</div>
-      <div id="arenaAdminTokenWrapFiles" class="admin-token-toolbar" data-lisa-admin-token-wrap>
-        <label>
-          <strong>Admin token</strong> — paste <code>LISA_ADMIN_TOKEN</code> here before Delete (token value only, not the <code>export</code> line)
-          <input type="password" id="arenaAdminTokenInputToolbar" data-lisa-admin-token data-lisa-admin-token-focus autocomplete="off" placeholder="0a22c2c4…" />
-        </label>
-      </div>
       <div class="toolbar-row">
         <button class="mini-btn" type="button" id="arenaSelectVisibleBtn">Select visible</button>
         <button class="mini-btn" type="button" id="arenaClearSelectionBtn">Clear selection</button>
@@ -464,13 +454,7 @@
             return saved;
           } catch (_) { return ""; }
         },
-        persistToken: () => {
-          try {
-            const el = document.getElementById("arenaAdminTokenInput");
-            const tok = String(el?.value || "").trim();
-            if (tok) localStorage.setItem(_TOKEN_KEY, tok);
-          } catch (_) {}
-        },
+        persistToken: () => {},
         adminHeaders: (extra) => {
           const h = { ...(extra || {}) };
           const tok = window.LisaAdminUI.tokenValue();
@@ -489,10 +473,9 @@
           return false;
         },
         focusTokenField: () => {
-          const wrap = document.getElementById("arenaAdminTokenWrap");
-          const el = document.getElementById("arenaAdminTokenInput");
-          if (wrap) wrap.style.display = "block";
-          if (el) el.focus();
+          try {
+            global.open("/assistant-console", "_blank", "noopener,noreferrer");
+          } catch (_) {}
         },
         showNotice: (msg) => Promise.resolve(window.alert(msg)),
         showAuthError: (msg) => Promise.resolve(window.alert(msg)),
@@ -1056,15 +1039,8 @@
     });
 
     loadPrefs();
-    LisaAdminUI.init({
-      tokenInputId: "arenaAdminTokenInputToolbar",
-      tokenWrapId: "arenaAdminTokenWrapFiles",
-    })
-      .then(() => {
-        const tok = LisaAdminUI.tokenValue();
-        if (tok) LisaAdminUI.persistToken();
-        return syncStatus();
-      })
+    LisaAdminUI.init({})
+      .then(() => syncStatus())
       .catch(() => syncStatus());
   </script>
 </body>

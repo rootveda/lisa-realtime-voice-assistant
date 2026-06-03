@@ -548,7 +548,7 @@
               </tr>
               <tr>
                 <td><strong>Secrets hygiene</strong></td>
-                <td><code>lisa_admin_token.env</code> is gitignored. Token never committed. UI stores token in browser <code>localStorage</code> for convenience (not on server disk).</td>
+                <td>Keep the token in <code>lisa_admin_token.env</code> on this machine. The UI stores it in browser <code>localStorage</code> for admin API calls (not on server disk).</td>
                 <td>Repo + browser</td>
               </tr>
               <tr>
@@ -602,7 +602,7 @@
           <h3>Security best practices</h3>
           <ol>
             <li>Use <code>./offline_setup/lisa_stack.sh start</code> for solo local work; only use <code>--admin</code> when you need LAN/phone access.</li>
-            <li>Generate a long random token: <code>openssl rand -hex 24</code>. Never commit <code>lisa_admin_token.env</code>.</li>
+            <li>Generate a long random token: <code>openssl rand -hex 24</code>. Keep it only in <code>lisa_admin_token.env</code>.</li>
             <li>Keep the stack on a trusted home network; do not port-forward 7860/8088 to the internet without a proper VPN or authenticated reverse proxy.</li>
             <li>Verify mode after start: <code>curl -sk https://127.0.0.1:7860/api/admin/capabilities</code></li>
             <li>Clear stale tokens in the browser if you rotate <code>LISA_ADMIN_TOKEN</code> (LLM Routing field or manager sidebar).</li>
@@ -641,7 +641,7 @@
 
           <h3 id="admin-setup">Setup &amp; usage</h3>
           <ol>
-            <li>Copy <code>offline_setup/lisa_admin_token.env.example</code> → <code>lisa_admin_token.env</code> (gitignored).</li>
+            <li>Copy <code>offline_setup/lisa_admin_token.env.example</code> → <code>lisa_admin_token.env</code>.</li>
             <li>Set <code>LISA_ADMIN_TOKEN</code> — generate: <code>openssl rand -hex 24</code></li>
             <li>Start with <code>./offline_setup/lisa_stack.sh start --admin</code></li>
             <li>Paste token in UI fields (saved to browser <code>localStorage</code>):

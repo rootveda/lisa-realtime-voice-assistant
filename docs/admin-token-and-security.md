@@ -23,7 +23,7 @@ Related docs:
 | Format | Any string; generate with `openssl rand -hex 24` (48 hex chars) |
 | Sent as | `Authorization: Bearer <token>` |
 | Stored | Server: env var at process start. Browser: optional password field in **LLM Routing** panel → `localStorage` key `assistantConsole.lisaAdminToken.v1` |
-| Git | **Never commit.** Use `offline_setup/lisa_admin_token.env` (gitignored) |
+| On disk | `offline_setup/lisa_admin_token.env` (local only; copy from `.example`) |
 
 ### How auth is decided (server)
 
@@ -82,7 +82,7 @@ Use when you only open the console on the **same PC** that runs the stack. No LA
 
 Use when you want **HTTPS on all interfaces** and **mutations protected** by a token.
 
-**File:** `offline_setup/lisa_admin_token.env` (create from template, do not commit):
+**File:** `offline_setup/lisa_admin_token.env` (create from template):
 
 ```bash
 export LISA_BIND_PUBLIC=1

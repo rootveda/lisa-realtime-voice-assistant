@@ -291,10 +291,6 @@
   <div class="lisa-page-layout">
     <aside class="lisa-side-panel" data-lisa-security-panel>
       <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite" style="margin-top:0;">Checking security mode…</div>
-      <label id="faceAdminTokenWrap" class="muted" data-lisa-admin-token-wrap style="display:none;margin-top:12px;">
-        Admin token (mutations in admin mode)
-        <input type="password" id="faceAdminTokenInput" data-lisa-admin-token data-lisa-admin-token-focus autocomplete="off" placeholder="Paste LISA_ADMIN_TOKEN" style="width:100%;margin-top:4px;" />
-      </label>
       <p class="muted" style="margin-top:12px;margin-bottom:0;">
         Enable the server face pipeline, rename <code>unknown_*</code> identities, and control
         <strong>auto</strong> / <strong>multiface</strong> / <strong>pinned person</strong> for a live
@@ -495,7 +491,7 @@
           data = await res.clone().json();
         } catch (_) {}
         if (await window.LisaAdminUI.checkAuthResponse(res, data, "Face manager")) {
-          throw new Error("Admin token required — paste LISA_ADMIN_TOKEN in the sidebar.");
+          throw new Error("Admin token required — set it on Assistant Console → Workspace configuration → Stack admin token.");
         }
       }
       return res;
@@ -991,7 +987,7 @@
 
     function initFaceManager() {
       if (typeof window.LisaAdminUI === "object" && typeof window.LisaAdminUI.init === "function") {
-        window.LisaAdminUI.init({ tokenInputId: "faceAdminTokenInput", tokenWrapId: "faceAdminTokenWrap" });
+        window.LisaAdminUI.init({});
       }
       wirePageModal();
 

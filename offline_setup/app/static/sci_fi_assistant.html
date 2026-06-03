@@ -1017,6 +1017,7 @@
               <button id="voiceVideoToggleBtn" class="voice-video-toggle inactive" type="button">Voice+Video: Off</button>
               <button id="voiceVideoFaceToggleBtn" class="voice-video-face-toggle inactive" type="button">Voice+Video+Face: Off</button>
               <button id="muteBtn" type="button">Mute Output</button>
+              <button id="muteMicBtn" type="button" disabled>Mute Mic</button>
               <span id="llmRouteToggleBtn" class="route-toggle local" role="status" aria-live="polite" tabindex="-1" title="Current LLM route (use Apply Routing below to change)">Active Route: Local</span>
             </div>
             <div class="vision-hint-head">
@@ -1218,11 +1219,6 @@
               <strong>Vision:</strong> image captions always go through <strong>Ollama</strong> (<code>VISION_OLLAMA_MODEL</code> in the stack), independent of this dialogue route.
               With <strong>Local</strong> dialogue + vision + XTTS on one GPU, VRAM can spike; with <strong>Ollama</strong> for both dialogue and captions, use smaller tags (e.g. <code>gemma4:e2b-it-q4_K_M</code>) or run <code>./offline_setup/lisa_stack.sh status</code> to inspect GPU rows.
             </p>
-            <label id="lisaAdminTokenWrap" style="display:none;flex-direction:column;gap:4px;font-size:11px;margin-top:10px;">
-              Admin token (<code>LISA_ADMIN_TOKEN</code>)
-              <input type="password" id="lisaAdminTokenInput" autocomplete="off" placeholder="Paste from offline_setup/lisa_admin_token.env" style="padding:6px;border-radius:6px;border:1px solid var(--line);background:#0d162b;color:var(--text);" />
-              <span class="k" style="margin:0;line-height:1.4;color:var(--muted);">Required for Apply Routing and full-stack restart when the server runs with <code>LISA_BIND_LOOPBACK_ONLY=0</code>. Stored in this browser only.</span>
-            </label>
             <button id="applyRoutingBtn">Apply Routing (Restart Stack)</button>
           </div>
         </details>
@@ -1230,7 +1226,7 @@
           <summary>Full stack restart (expand)</summary>
           <div class="tool-body">
             <p class="k" style="margin:0;line-height:1.45;">
-              Runs <code>offline_setup/start_current_stack.sh</code> (ASR, XTTS, LLM, bot on :7861, HTTPS on :7860). Takes several minutes; this page may disconnect until the bot is back.
+              Runs <code>offline_setup/start_current_stack.sh</code> (ASR, XTTS, LLM, bot on :7861, HTTPS on :7860). Takes several minutes; this page may disconnect until the bot is back. Uses the <strong>Admin token</strong> below when admin mode is on.
             </p>
             <button type="button" id="fullStackRestartBtn" style="margin-top:8px;width:100%;font-weight:600;border-width:2px;border-color:#8b5432;background:#241810;color:#ffc9a0;">
               Restart full stack
@@ -1257,7 +1253,37 @@
             </div>
           </div>
         </details>
-        <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite">Checking security mode…</div>
+        <div
+          id="securityModeBanner"
+          class="security-mode-banner admin"
+          role="status"
+          aria-live="polite"
+          style="margin-top:12px;"
+        >
+          <strong>Admin mode</strong> — Bearer token required for routing, full restart, RAG, and managers.
+          Paste it in the <strong>Admin token</strong> field below (from <code>offline_setup/lisa_admin_token.env</code>).
+        </div>
+        <div
+          id="lisaAdminTokenWrap"
+          data-lisa-admin-token-wrap
+          style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#0d162b;"
+        >
+          <label style="display:flex;flex-direction:column;gap:8px;font-size:12px;margin:0;">
+            <strong>Admin token</strong>
+            <input
+              type="password"
+              id="lisaAdminTokenInput"
+              data-lisa-admin-token
+              data-lisa-admin-token-focus
+              autocomplete="off"
+              placeholder="Paste token from offline_setup/lisa_admin_token.env"
+              style="padding:8px;border-radius:6px;border:1px solid var(--line);background:#0b1426;color:var(--text);font-family:ui-monospace,monospace;font-size:12px;"
+            />
+            <p id="lisaAdminTokenStatus" class="lisa-admin-token-status checking" role="status" aria-live="polite" style="margin:0;">
+              Status — paste token to verify
+            </p>
+          </label>
+        </div>
       </div>
     </section>
     <div class="pane-splitter" id="paneSplitter" title="Drag to resize left pane"></div>
@@ -1296,8 +1322,8 @@
   </main>
   <div id="screenLock" class="overlay" aria-live="polite">
     <div class="overlay-card">
-      <div class="overlay-title">Switching LLM Routing</div>
-      <div id="screenLockMsg" class="overlay-msg">Preparing switch...</div>
+      <div id="screenLockTitle" class="overlay-title">Please wait</div>
+      <div id="screenLockMsg" class="overlay-msg">Preparing…</div>
     </div>
   </div>
   <div id="ragConfirm" class="overlay" aria-live="polite" aria-modal="true" role="dialog">
@@ -1434,7 +1460,6 @@
     const applyRoutingBtnEl = document.getElementById("applyRoutingBtn");
     const lisaAdminTokenWrapEl = document.getElementById("lisaAdminTokenWrap");
     const lisaAdminTokenInputEl = document.getElementById("lisaAdminTokenInput");
-    const LISA_ADMIN_TOKEN_KEY = "assistantConsole.lisaAdminToken.v1";
     let lisaAdminTokenRequired = false;
     const fullStackRestartBtnEl = document.getElementById("fullStackRestartBtn");
     const contextStressRunPanelEl = document.getElementById("contextStressRunPanel");
@@ -1445,6 +1470,7 @@
     const contextStressTokenWrapEl = document.getElementById("contextStressTokenWrap");
     const contextStressTokenInputEl = document.getElementById("contextStressTokenInput");
     const screenLockEl = document.getElementById("screenLock");
+    const screenLockTitleEl = document.getElementById("screenLockTitle");
     const screenLockMsgEl = document.getElementById("screenLockMsg");
     const ragConfirmEl = document.getElementById("ragConfirm");
     const ragConfirmTitleEl = document.getElementById("ragConfirmTitle");
@@ -1541,6 +1567,7 @@
     visionVidEl.addEventListener("loadeddata", () => updateMissionCamPlaceholder());
     visionVidEl.addEventListener("playing", () => updateMissionCamPlaceholder());
     const muteBtnEl = document.getElementById("muteBtn");
+    const muteMicBtnEl = document.getElementById("muteMicBtn");
     const voiceToggleBtnEl = document.getElementById("voiceToggleBtn");
     const voiceVideoToggleBtnEl = document.getElementById("voiceVideoToggleBtn");
     const voiceVideoFaceToggleBtnEl = document.getElementById("voiceVideoFaceToggleBtn");
@@ -1590,7 +1617,7 @@
     const TEXT_CHAT_PROMPT_TOKENS_CAP = 500000;
     const TEXT_CHAT_PROMPT_CHARS_CAP = 500000;
 
-    let ws, stream, ctx, src, proc, playCtx, playAt = 0, muted = false;
+    let ws, stream, ctx, src, proc, playCtx, playAt = 0, muted = false, micMuted = false;
     let voiceActive = false;
     /** 'off' | 'audio' | 'video' | 'video_face' — video_face = camera + vision WS + face_recognition in client-ready. */
     let voiceMode = "off";
@@ -3153,9 +3180,29 @@
       addLog("assistant", t, { verbose: llmVerboseEl.checked ? verboseText : "" });
     }
 
+    function applyMicMuteToStream() {
+      if (stream) {
+        stream.getAudioTracks().forEach((t) => {
+          t.enabled = !micMuted;
+        });
+      }
+      muteMicBtnEl.textContent = micMuted ? "Unmute Mic" : "Mute Mic";
+    }
+
+    function setMicMuteUi(voiceOn) {
+      muteMicBtnEl.disabled = !voiceOn;
+      if (!voiceOn) {
+        micMuted = false;
+        muteMicBtnEl.textContent = "Mute Mic";
+      } else {
+        applyMicMuteToStream();
+      }
+    }
+
     function setVoiceButtonState(active) {
       voiceActive = !!active;
       if (!voiceActive) voiceMode = "off";
+      setMicMuteUi(voiceActive);
       voiceToggleBtnEl.classList.toggle("active", voiceActive);
       voiceToggleBtnEl.classList.toggle("inactive", !voiceActive);
       voiceToggleBtnEl.textContent = voiceActive ? "Voice: On" : "Voice: Off";
@@ -3455,9 +3502,37 @@
       return ` · ${usedStr} / ${lim.toLocaleString()} ${tail}`;
     }
 
+    function resolveAppUptimeSec(data) {
+      const app = data?.app;
+      if (!app || typeof app !== "object") return null;
+      const u = app.uptime_sec;
+      if (u != null && Number.isFinite(Number(u)) && Number(u) >= 0) return Number(u);
+      const st = app.started_at_unix;
+      if (st != null && Number.isFinite(Number(st))) {
+        return Math.max(0, Date.now() / 1000 - Number(st));
+      }
+      return null;
+    }
+
+    function formatAppUptime(sec) {
+      if (sec == null || !Number.isFinite(Number(sec)) || Number(sec) < 0) return "—";
+      let s = Math.floor(Number(sec));
+      const d = Math.floor(s / 86400);
+      s %= 86400;
+      const h = Math.floor(s / 3600);
+      s %= 3600;
+      const m = Math.floor(s / 60);
+      s %= 60;
+      if (d > 0) return `${d}d ${h}h ${m}m`;
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    }
+
     function paintRuntimeModelSummaryCard() {
       if (!runtimeModelSummaryEl || !runtimeStatusDisplayCache) return;
       const data = runtimeStatusDisplayCache;
+      const uptimeLine = `App uptime: ${formatAppUptime(resolveAppUptimeSec(data))}`;
       const visionModel = runtimeStatusVisionModelCached;
       const activeModelLocal = data?.models?.llm_model || activeModel || "";
       const ttsSummary = `${data?.models?.tts_provider || "xtts"} (${data?.models?.tts_voice || "default"})`;
@@ -3483,6 +3558,7 @@
       const llmCtxSeg = formatCtxUsedOutOfTotal(llmCtxN, lastTextChatUsageForRuntime, "");
       const visionCtxSeg = formatCtxUsedOutOfTotal(visionCtxN, null, "caption");
       runtimeModelSummaryEl.textContent =
+        `${uptimeLine}\n` +
         `LLM: ${activeModelLocal || "unknown"} (size: ${llmSize})${llmCtxSeg}\n` +
         `STT: ${sttSummary} (size: ${sttSize})\n` +
         `TTS: ${ttsSummary} (size: ${ttsSize})\n` +
@@ -3490,7 +3566,6 @@
     }
 
     async function refreshRuntimeStatus() {
-      if (!powerStatsHydrated) return;
       try {
         const res = await fetch("/api/runtime-status", { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -3652,7 +3727,6 @@
     });
     startContextStressFooterPoll();
     refreshChatAttachLimits();
-    initLisaAdminTokenInput();
     refreshRagPanel();
     refreshContextStressRunCapabilities();
     refreshContextStressRunStatus();
@@ -3761,8 +3835,9 @@
       }
     }
 
-    function setScreenLock(show, message = "") {
+    function setScreenLock(show, message = "", title = "") {
       screenLockEl.classList.toggle("show", !!show);
+      if (title) screenLockTitleEl.textContent = title;
       if (message) screenLockMsgEl.textContent = message;
     }
 
@@ -3953,10 +4028,11 @@
           src.connect(proc);
           proc.connect(ctx.destination);
           proc.onaudioprocess = (e) => {
-            if (ws?.readyState !== 1) return;
+            if (ws?.readyState !== 1 || micMuted) return;
             const m = e.inputBuffer.getChannelData(0);
             ws.send(f32to16(rs16(m, ctx.sampleRate)).buffer);
           };
+          applyMicMuteToStream();
           statusEl.textContent = "Streaming";
           faceReconnectExpectedClose = false;
           addPersistedSystemLog("Voice WebSocket reconnected with updated face-mode instructions.");
@@ -4078,10 +4154,11 @@
         src.connect(proc);
         proc.connect(ctx.destination);
         proc.onaudioprocess = (e) => {
-          if (ws?.readyState !== 1) return;
+          if (ws?.readyState !== 1 || micMuted) return;
           const m = e.inputBuffer.getChannelData(0);
           ws.send(f32to16(rs16(m, ctx.sampleRate)).buffer);
         };
+        applyMicMuteToStream();
         statusEl.textContent = "Streaming";
         setVoiceButtonState(true);
         addLog(
@@ -4370,6 +4447,11 @@
       muted = !muted;
       muteBtnEl.textContent = muted ? "Unmute Output" : "Mute Output";
     };
+    muteMicBtnEl.onclick = () => {
+      if (!voiceActive) return;
+      micMuted = !micMuted;
+      applyMicMuteToStream();
+    };
     sendBtnEl.onclick = () => sendTextMessage().catch(e => addLog("system", e.message));
     textInputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -4401,34 +4483,15 @@
       LisaAdminUI.persistToken();
     }
 
-    function initLisaAdminTokenInput() {
-      if (!lisaAdminTokenInputEl) return;
-      try {
-        const saved = safeTrim(localStorage.getItem(LISA_ADMIN_TOKEN_KEY) || "");
-        if (saved) lisaAdminTokenInputEl.value = saved;
-      } catch (_) {}
-      lisaAdminTokenInputEl.addEventListener("change", persistLisaAdminToken);
-      lisaAdminTokenInputEl.addEventListener("blur", persistLisaAdminToken);
-    }
-
-    async function refreshLisaAdminCapabilities() {
-      const j = await LisaAdminUI.refreshCapabilities();
-      if (!j) return;
-      lisaAdminTokenRequired = !!j.admin_token_required;
-      if (lisaAdminTokenWrapEl) {
-        lisaAdminTokenWrapEl.style.display = lisaAdminTokenRequired ? "flex" : "none";
-      }
-    }
-
-    function requireLisaAdminToken(actionLabel) {
+    async function requireLisaAdminToken(actionLabel) {
       return LisaAdminUI.ensureAdminToken(actionLabel);
     }
 
     async function applyRouting(provider) {
-      if (!requireLisaAdminToken("Routing switch")) return;
+      if (!(await requireLisaAdminToken("Routing switch"))) return;
       persistLisaAdminToken();
       const model = safeTrim(llmModelOverrideEl.value);
-      setScreenLock(true, "Flushing GPU workloads and preparing model switch...");
+      setScreenLock(true, "Flushing GPU workloads and preparing model switch…", "Switching LLM routing");
       try {
         let applyAck = false;
         let lastErr = null;
@@ -4454,7 +4517,7 @@
           // Common during restart: fetch can fail while bot/API process is bouncing.
           lastErr = e;
         }
-        setScreenLock(true, "Reloading stack models and voice services...");
+        setScreenLock(true, "Reloading stack models and voice services…", "Switching LLM routing");
         const targetProviderText = provider === "ollama" ? "ollama" : "local-llama";
         let switched = false;
         for (let i = 0; i < 120; i++) {
@@ -4544,9 +4607,54 @@
       }
     }
 
+    async function waitForFullStackRestartHealthy(baselinePid) {
+      setScreenLock(true, "Restarting ASR, XTTS, LLM, bot, and HTTPS…", "Full stack restart");
+      let sawDown = false;
+      try {
+        for (let i = 0; i < 120; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          try {
+            const statusRes = await fetch("/api/runtime-status", { cache: "no-store" });
+            if (!statusRes.ok) {
+              sawDown = true;
+              continue;
+            }
+            const statusData = await statusRes.json();
+            const model = String(statusData?.models?.llm_model || "").trim();
+            if (!model) continue;
+            const pid = statusData?.app?.pid;
+            const upSec = resolveAppUptimeSec(statusData);
+            const provider = String(statusData?.models?.llm_provider || "unknown");
+            const pidChanged = baselinePid != null && pid != null && pid !== baselinePid;
+            const freshProcess = upSec != null && upSec < 120;
+            if (sawDown && (pidChanged || freshProcess)) {
+              await refreshRuntimeStatus();
+              await refreshOllamaModels();
+              const upLabel = formatAppUptime(upSec);
+              addLog(
+                "system",
+                `Full stack restart completed. ASR, XTTS, LLM, and bot are healthy (app uptime ${upLabel}, pid ${pid ?? "?"}, route ${provider}, model ${model}).`,
+              );
+              refreshVisionRoutingHint().catch(() => {});
+              return true;
+            }
+          } catch (_) {
+            sawDown = true;
+          }
+        }
+        addLog(
+          "system",
+          "Full stack restart: timed out waiting for a healthy stack (check ./offline_setup/lisa_stack.sh status).",
+        );
+        return false;
+      } finally {
+        setTimeout(() => setScreenLock(false), 300);
+      }
+    }
+
     fullStackRestartBtnEl.onclick = async () => {
       if (fullStackRestartBtnEl.disabled) return;
-      if (!requireLisaAdminToken("Full stack restart")) return;
+      if (!(await requireLisaAdminToken("Full stack restart"))) return;
       persistLisaAdminToken();
       const ok = await confirmInPage(
         "Restart the entire Lisa stack (ASR, XTTS, LLM, bot, HTTPS)? This tab may stop responding for several minutes.",
@@ -4556,6 +4664,7 @@
       if (!ok) {
         return;
       }
+      const baselinePid = runtimeStatusDisplayCache?.app?.pid ?? null;
       fullStackRestartBtnEl.disabled = true;
       try {
         const res = await fetch("/api/stack/restart", {
@@ -4572,7 +4681,8 @@
           return;
         }
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        addLog("system", data.message || "Full stack restart scheduled.");
+        addLog("system", data.message || "Full stack restart scheduled (starts in ~3s).");
+        await waitForFullStackRestartHealthy(baselinePid);
       } catch (e) {
         if (LisaAdminUI.isAuthMessage(e.message)) {
           await LisaAdminUI.showAuthError(e.message, "Full stack restart");
@@ -4580,14 +4690,14 @@
           addLog("system", `Full stack restart failed: ${e.message}`);
         }
       } finally {
-        setTimeout(() => { fullStackRestartBtnEl.disabled = false; }, 4000);
+        fullStackRestartBtnEl.disabled = false;
       }
     };
 
     if (contextStressRunBtnEl) {
       contextStressRunBtnEl.addEventListener("click", async () => {
         if (contextStressRunBtnEl.disabled) return;
-        if (!requireLisaAdminToken("Context stress run")) return;
+        if (!(await requireLisaAdminToken("Context stress run"))) return;
         persistLisaAdminToken();
         const tok = safeTrim(contextStressTokenInputEl?.value || "");
         if (contextStressTokenGateRequired && !tok) {
@@ -4732,16 +4842,14 @@
     LisaAdminUI.init({
       tokenInputId: "lisaAdminTokenInput",
       tokenWrapId: "lisaAdminTokenWrap",
+      tokenStatusId: "lisaAdminTokenStatus",
       onCapabilities: (j) => {
-        lisaAdminTokenRequired = !!j.admin_token_required;
-        if (lisaAdminTokenWrapEl) {
-          lisaAdminTokenWrapEl.style.display = lisaAdminTokenRequired ? "flex" : "none";
-        }
+        if (j) lisaAdminTokenRequired = !!j.admin_token_required;
       },
-    }).then(() => refreshLisaAdminCapabilities()).catch(() => {});
+    }).catch(() => {});
     document.getElementById("ragSyncBtn").addEventListener("click", () => refreshRagPanel());
     document.getElementById("ragRebuildBtn").addEventListener("click", async () => {
-      if (!requireLisaAdminToken("RAG rebuild")) return;
+      if (!(await requireLisaAdminToken("RAG rebuild"))) return;
       persistLisaAdminToken();
       const statusEl = document.getElementById("ragPanelStatus");
       try {
@@ -4789,16 +4897,18 @@
     setVoiceButtonState(false);
     updateMissionCamPlaceholder();
     refreshVisionRoutingHint().catch(() => {});
+    refreshRuntimeStatus();
+    let runtimeStatusInFlight = false;
+    runtimeStatusTimer = setInterval(async () => {
+      if (document.hidden) return;
+      if (runtimeStatusInFlight) return;
+      runtimeStatusInFlight = true;
+      try { await refreshRuntimeStatus(); }
+      finally { runtimeStatusInFlight = false; }
+    }, 2500);
     initPowerStats().then(() => {
       refreshRuntimeStatus();
-      let runtimeStatusInFlight = false;
-      runtimeStatusTimer = setInterval(async () => {
-        if (document.hidden) return;
-        if (runtimeStatusInFlight) return;
-        runtimeStatusInFlight = true;
-        try { await refreshRuntimeStatus(); }
-        finally { runtimeStatusInFlight = false; }
-      }, 2500);
+      updatePowerConsumptionCard();
     });
     window.addEventListener("pagehide", () => {
       try { stopContextStressFooterPoll(); } catch (_) {}

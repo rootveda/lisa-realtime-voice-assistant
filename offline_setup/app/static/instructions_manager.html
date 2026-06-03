@@ -42,10 +42,6 @@
         <div class="muted">Repo = editable/deletable. Bundled = read-only until you save an override.</div>
         <div id="list"></div>
         <div id="securityModeBanner" class="security-mode-banner" role="status" aria-live="polite">Checking security mode…</div>
-        <label id="instrAdminTokenWrap" class="muted" data-lisa-admin-token-wrap style="display:none;">
-          Admin token (save/delete in admin mode)
-          <input type="password" id="instrAdminTokenInput" data-lisa-admin-token data-lisa-admin-token-focus autocomplete="off" placeholder="Paste LISA_ADMIN_TOKEN" style="width:100%;margin-top:4px;" />
-        </label>
       </div>
     </div>
     <div class="panel">
@@ -95,7 +91,7 @@
     }
     async function instrMutatingFetch(url, options = {}, actionLabel = "Save instruction") {
       if (window.LisaAdminUI?.ensureAdminToken && !(await window.LisaAdminUI.ensureAdminToken(actionLabel))) {
-        throw new Error("Admin token required.");
+        throw new Error("Admin token required — set it on Assistant Console → Workspace configuration → Stack admin token.");
       }
       window.LisaAdminUI?.persistToken?.();
       const headers = { ...(options.headers || {}) };
@@ -104,7 +100,7 @@
       let data = null;
       try { data = await res.clone().json(); } catch (_) {}
       if (window.LisaAdminUI?.checkAuthResponse && (await window.LisaAdminUI.checkAuthResponse(res, data, actionLabel))) {
-        throw new Error("Admin token required.");
+        throw new Error("Admin token required — set it on Assistant Console → Workspace configuration → Stack admin token.");
       }
       return { res, data };
     }
@@ -244,10 +240,7 @@
 
     (async function initInstructionsManager() {
       if (window.LisaAdminUI?.init) {
-        await window.LisaAdminUI.init({
-          tokenInputId: "instrAdminTokenInput",
-          tokenWrapId: "instrAdminTokenWrap",
-        });
+        await window.LisaAdminUI.init({});
       }
       await loadList();
     })().catch((e) => setStatus(e.message, true));

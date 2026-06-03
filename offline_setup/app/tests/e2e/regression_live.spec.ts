@@ -34,6 +34,9 @@ test.describe("Discovery & static routes", () => {
     const j = await r.json();
     expect(j).toHaveProperty("models");
     expect(j).toHaveProperty("gpu");
+    expect(j).toHaveProperty("app");
+    expect(typeof j.app?.uptime_sec).toBe("number");
+    expect(j.app.uptime_sec).toBeGreaterThanOrEqual(0);
   });
 
   test("GET /api/mobile-voice + /api/mobile-voice-vision", async ({ request }) => {

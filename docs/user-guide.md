@@ -257,7 +257,7 @@ It is **appropriate for personal use on your own machine or LAN with a shared ad
 | **WebSocket same-origin** | Assistant Console forces voice/vision WebSocket URLs to same host — blocks arbitrary remote WS endpoints from UI config. | `sci_fi_assistant.html` |
 | **Offline tool egress** | Local agent HTTP connectors restricted to allowlisted hosts (`127.0.0.1`, `localhost` by default). No open internet proxy from tools unless you expand `TOOL_HTTP_ALLOW_*`. | `local_tool_executor.py` |
 | **Upload & body limits** | Attachment streaming cap (`CHAT_ATTACH_MAX_BYTES`, default 20 MiB) with early 413. Power-stats and context-stress payloads schema-whitelisted and size-capped. PDF/text extraction caps. | `chat_attachments.py`, power-stats API |
-| **Secrets hygiene** | `lisa_admin_token.env` is gitignored. Token never committed. UI stores token in browser `localStorage` for convenience (not on server disk). | Repo + browser |
+| **Secrets hygiene** | Keep the token in `lisa_admin_token.env` on this machine. UI stores it in browser `localStorage` for admin API calls (not on server disk). | Local + browser |
 | **Cache control** | Manager pages and sensitive API paths send `Cache-Control: no-store` to reduce stale UI/token confusion. | HTTP middleware |
 
 ### How secure is this in practice?
@@ -282,7 +282,7 @@ It is **appropriate for personal use on your own machine or LAN with a shared ad
 ### Security best practices
 
 1. Use `./offline_setup/lisa_stack.sh start` for solo local work; only use `--admin` when you need LAN/phone access.
-2. Generate a long random token: `openssl rand -hex 24`. Never commit `lisa_admin_token.env`.
+2. Generate a long random token: `openssl rand -hex 24`. Keep it only in `lisa_admin_token.env`.
 3. Keep the stack on a trusted home network; do not port-forward 7860/8088 to the internet without a proper VPN or authenticated reverse proxy.
 4. Verify mode after start: `curl -sk https://127.0.0.1:7860/api/admin/capabilities`
 5. Clear stale tokens in the browser if you rotate `LISA_ADMIN_TOKEN` (LLM Routing field or manager sidebar).
@@ -305,7 +305,7 @@ Full remediation history (Phases 1–7): `docs/remediation-phases-2026-05.md`. A
 
 ### Setup & usage
 
-1. Copy `offline_setup/lisa_admin_token.env.example` → `lisa_admin_token.env` (gitignored).
+1. Copy `offline_setup/lisa_admin_token.env.example` → `lisa_admin_token.env`.
 2. Set `LISA_ADMIN_TOKEN` — generate: `openssl rand -hex 24`
 3. Start with `./offline_setup/lisa_stack.sh start --admin`
 4. Paste token in UI fields (saved to browser `localStorage`):
