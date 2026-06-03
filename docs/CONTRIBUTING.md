@@ -10,7 +10,15 @@
 - `offline_setup/app/rag_data/` except `.gitkeep`
 - Large artifacts: `offline_setup/models/`, `hf_cache/`, `bundle/`, `xtts_tts_data/`, `.venv/`, `.cache/`
 
-Before push, manually verify: no `LISA_ADMIN_TOKEN=<hex>` in the index, no `rag_data/` contents tracked (except `.gitkeep`), no machine-specific paths (`/home/...`, backup folder names).
+## Git hooks (required on every clone)
+
+Install once so **commit** and **push** are blocked when secrets or local data would upload:
+
+```bash
+./scripts/install_git_hooks.sh
+```
+
+Checks run via `scripts/git_push_guard.sh` (machine paths, admin tokens, TLS private keys, `rag_data/`, large files). Emergency bypass only: `LISA_SKIP_PUSH_GUARD=1 git push`.
 
 ## Setup for new machines
 

@@ -284,6 +284,7 @@ Full list: [stack-start-stop.md](stack-start-stop.md).
 ## Verification checklist
 
 ```bash
+./scripts/install_git_hooks.sh      # once per clone — blocks unsafe git push
 ./offline_setup/lisa_stack.sh status  # GPU table + health probes
 curl -sk https://127.0.0.1:7860/api/admin/capabilities
 curl -sk https://127.0.0.1:8080/health
