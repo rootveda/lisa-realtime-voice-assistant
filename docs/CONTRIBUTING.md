@@ -3,6 +3,7 @@
 ## Never commit
 
 - `offline_setup/lisa_admin_token.env` or any file containing `LISA_ADMIN_TOKEN=<hex>`
+- `offline_setup/certs/localhost.key` / `localhost.crt` (generated locally by `start_current_stack.sh` or `openssl`)
 - **Personal instruction presets** (real people's names, private child profiles). Ship only generic `*_example.md` templates.
 - Contents under `offline_setup/rag_data/` (documents, attachments, SQLite indexes) — only `.gitkeep` skeletons belong in Git
 - `offline_setup/app/assistant_console_*.v1.json` (chat sessions, power stats)

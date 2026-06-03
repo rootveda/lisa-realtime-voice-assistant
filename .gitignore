@@ -56,3 +56,5 @@ Thumbs.db
 
 # --- Local-only (not published) ---
 scripts/pre_push_sanity.sh
+offline_setup/certs/*.key
+offline_setup/certs/*.crt
