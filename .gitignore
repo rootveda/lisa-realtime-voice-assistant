@@ -53,3 +53,6 @@ offline_setup/app/logs/
 # --- OS ---
 .DS_Store
 Thumbs.db
+
+# --- Local-only (not published) ---
+scripts/pre_push_sanity.sh

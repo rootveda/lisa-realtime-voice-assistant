@@ -9,11 +9,7 @@
 - `offline_setup/app/rag_data/` except `.gitkeep`
 - Large artifacts: `offline_setup/models/`, `hf_cache/`, `bundle/`, `xtts_tts_data/`, `.venv/`, `.cache/`
 
-Run before push:
-
-```bash
-./scripts/pre_push_sanity.sh
-```
+Before push, manually verify: no `LISA_ADMIN_TOKEN=<hex>` in the index, no `rag_data/` contents tracked (except `.gitkeep`), no machine-specific paths (`/home/...`, backup folder names).
 
 ## Setup for new machines
 
