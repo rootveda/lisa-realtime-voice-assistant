@@ -6,9 +6,11 @@ Self-hosted, **fully offline real-time voice assistant** for Linux + NVIDIA GPU:
 
 **Topics:** `nvidia` · `nemotron` · `gemma` · `gemma4` · `voice-assistant` · `realtime-voice-assistant` · `speech-to-text` · `text-to-speech` · `local-llm` · `ollama` · `llama-cpp` · `rag` · `pipecat` · `webrtc` · `offline-ai` · `rtx` · `dgx`
 
-**New here?** [docs/SETUP.md](docs/SETUP.md) — hardware, dependencies, models, first install.
+## Get started
 
-**UI tour:** [screenshots/README.md](screenshots/README.md) — every page explained with screenshots.
+> [!TIP]
+> **First install** — [docs/SETUP.md](docs/SETUP.md): hardware, dependencies, models, first install.  
+> **UI tour** — [screenshots/README.md](screenshots/README.md): every page explained with screenshots.
 
 ---
 
