@@ -30,7 +30,7 @@ async function sanitize(page) {
       } else if (n.nodeType === 1) {
         if (n.tagName === "INPUT" && /token/i.test((n.id || "") + (n.placeholder || ""))) {
           n.value = "";
-          n.placeholder = "Admin token (paste locally — never commit)";
+          n.placeholder = "Paste token from offline_setup/lisa_admin_token.env";
         }
         for (const c of n.childNodes) walk(c);
       }

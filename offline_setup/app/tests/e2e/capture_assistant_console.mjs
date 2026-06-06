@@ -33,7 +33,7 @@ async function sanitizeDomForScreenshots(page) {
           const hint = (node.id || "") + (node.name || "") + (node.getAttribute("placeholder") || "");
           if (/token/i.test(hint)) {
             node.value = "";
-            node.placeholder = "Admin token (paste locally — never commit)";
+            node.placeholder = "Paste token from offline_setup/lisa_admin_token.env";
           }
         }
         for (const c of node.childNodes) walk(c);

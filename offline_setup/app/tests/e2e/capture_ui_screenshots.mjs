@@ -46,7 +46,7 @@ async function sanitizeDomForScreenshots(page) {
           const hint = (node.id || "") + (node.name || "") + (node.getAttribute("placeholder") || "");
           if (/token/i.test(hint)) {
             node.value = "";
-            node.placeholder = "Admin token (paste locally — never commit)";
+            node.placeholder = "Paste token from offline_setup/lisa_admin_token.env";
           }
         }
         for (const c of node.childNodes) walk(c);
@@ -114,7 +114,8 @@ async function main() {
     const url = `${BASE}${spec.path}`;
     console.log(`Capturing ${url} ...`);
     try {
-      const resp = await page.goto(url, { waitUntil: "networkidle", timeout: 120_000 });
+      const waitUntil = spec.path === "/assistant-console" ? "load" : "networkidle";
+      const resp = await page.goto(url, { waitUntil, timeout: 120_000 });
       if (!resp || resp.status() >= 400) {
         console.warn(`  WARN: ${spec.path} status ${resp?.status()}`);
       }
