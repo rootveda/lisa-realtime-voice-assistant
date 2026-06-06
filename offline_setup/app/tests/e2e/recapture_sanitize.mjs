@@ -8,11 +8,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(__dirname, "..", "..", "..", "..", "screenshots");
 const BASE = process.env.PLAYWRIGHT_BASE_URL || "https://127.0.0.1:7860";
 
+// Assistant Console uses capture_assistant_console.mjs (demo chat + sanitize).
 const PAGES = [
   { slug: "03-rag-arena", path: "/rag-arena" },
   { slug: "06-instructions-manager", path: "/instructions-manager" },
   { slug: "07-face-manager", path: "/face-manager" },
-  { slug: "01-assistant-console", path: "/assistant-console" },
 ];
 
 async function sanitize(page) {
